@@ -52,8 +52,8 @@ DEFAULT_CONFIG = {
     # YACReader 服务地址，删完触发重扫
     "yacreader_base": "http://192.168.10.89:8080",
     "library_id": 1,
-    # 移到这个子目录（相对 library_root），保留可恢复
-    "trash_dir_name": ".deleted",
+    # 移到这个目录保留（必须在库根外，否则 YACReader 重扫会把回收站里的文件又扫回库）
+    "trash_dir": "F:/manga-deleted",
     # 触发重扫（false 则只删文件不改索引）
     "trigger_rescan": True,
 }
@@ -163,8 +163,13 @@ def delete_comic(cfg, comic_id):
     if not os.path.isfile(src):
         return False, f'文件不存在: {os.path.basename(src)}', {}
 
-    trash = os.path.join(root, cfg['trash_dir_name'])
+    trash = cfg['trash_dir']
     os.makedirs(trash, exist_ok=True)
+
+    # 回收站必须在库外，否则会被重新扫描入库
+    trash_real = os.path.realpath(trash)
+    if trash_real == root or trash_real.startswith(root + os.sep):
+        return False, '回收站目录不能位于库根内', {}
 
     base, ext = os.path.splitext(os.path.basename(src))
     stamp = time.strftime('%Y%m%d-%H%M%S')
