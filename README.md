@@ -8,6 +8,8 @@ YACReader Library Server 的 Android 客户端，基于 [BLumia/pineapple-comic-
 
 阅读器从左右翻页（`SwipeView`）改为纵向连续滚动（垂直 `ListView`），第 1 页在上、第 2 页在下，适合长条漫画和手机竖屏。
 
+页面按视口范围懒加载（`Loader` + `nearViewport`），只有滚动到附近才发请求。这一点很重要：YACReader 服务端对同一本漫画的并发页面请求有限制，一次性请求全部页面会导致后续请求全部返回 404。实测一次性初始化 44 页请求时图片全白，限制到 4 个并发后恢复正常。
+
 ### 2. 阅读进度
 
 - 每本书读完的位置存在本地（`QSettings`，键 `progress/<comicId>`）
@@ -31,9 +33,7 @@ YACReader Library Server 的 Android 客户端，基于 [BLumia/pineapple-comic-
 
 ## 已知问题
 
-**页面图片加载不出来。** YACReader v2 API 的页面端点 `/v2/library/{lib}/comic/{id}/page/{n}/remote` 返回 404。从服务端源码看，`PageControllerV2` 通过 `x-request-id` header 绑定会话，`/remote` 端点负责创建会话，但按此流程调用仍取不到页面。上游项目的阅读器同样无法显示图片，属于未完成部分。
-
-下一步需要抓官方 Android 客户端的实际请求来确认真实的调用顺序。
+无已知阻断问题。上游的 `LibrarySelectionPage.qml` 原本有个 `model is not defined` 的 ReferenceError，已修复。
 
 ## 构建
 

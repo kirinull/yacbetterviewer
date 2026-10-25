@@ -45,7 +45,7 @@ Item {
         orientation: ListView.Vertical
         model: root.pageCount
         spacing: 2
-        cacheBuffer: 4000
+        cacheBuffer: 600
         boundsBehavior: Flickable.StopAtBounds
         flickDeceleration: 3000
 
@@ -53,29 +53,44 @@ Item {
             id: pageItem
             required property int index
             width: view.width
-            height: Math.max(pageImage.paintedHeight, 1)
+            height: pageLoader.item
+                    ? Math.max(pageLoader.item.paintedHeight, 1)
+                    : Math.round(view.width * 1.4)
 
-            Image {
-                id: pageImage
-                width: view.width
-                height: implicitWidth > 0 ? Math.round(width * implicitHeight / implicitWidth)
-                                         : Math.round(view.width * 1.4)
-                fillMode: Image.PreserveAspectFit
-                asynchronous: true
-                source: AppController.comicImageSource(pageItem.index)
+            // 只加载视口附近的页，避免一次性请求全部页面
+            // YACReader 服务端对同一 comic 的并发页面请求有限制，全量加载会返回 404
+            readonly property bool nearViewport: {
+                const vy = view.contentY
+                const vh = view.height
+                const top = pageItem.y
+                const bottom = pageItem.y + pageItem.height
+                return bottom > vy - vh * 0.5 && top < vy + vh * 1.5
+            }
 
-                onStatusChanged: function() {
-                    if (status === Image.Error) {
-                        retryTimer.restart()
+            Loader {
+                id: pageLoader
+                anchors.fill: parent
+                active: pageItem.nearViewport && root.visible
+
+                sourceComponent: Image {
+                    fillMode: Image.PreserveAspectFit
+                    asynchronous: true
+                    source: AppController.comicImageSource(pageItem.index)
+
+                    onStatusChanged: {
+                        if (status === Image.Error) {
+                            retryTimer.restart()
+                        }
                     }
-                }
 
-                Timer {
-                    id: retryTimer
-                    interval: 600
-                    onTriggered: {
-                        pageImage.source = ""
-                        pageImage.source = AppController.comicImageSource(pageItem.index)
+                    Timer {
+                        id: retryTimer
+                        interval: 800
+                        onTriggered: {
+                            const s = AppController.comicImageSource(pageItem.index)
+                            parent.source = ""
+                            parent.source = s
+                        }
                     }
                 }
             }
@@ -152,6 +167,7 @@ Item {
                 value: root.currentPage
                 onMoved: {
                     view.positionViewAtIndex(Math.round(value), ListView.Beginning)
+                    root.currentPage = Math.round(value)
                 }
             }
             Button {
