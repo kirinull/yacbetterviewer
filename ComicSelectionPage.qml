@@ -206,6 +206,17 @@ Item {
         GridView {
             id: gridView
             clip: true
+            // 允许下拉过冲，用来触发刷新
+            boundsBehavior: Flickable.DragAndOvershootBounds
+
+            // 手指从上往下拉到超过 80px 就刷新
+            onContentYChanged: {
+                if (contentY < -80 && !refreshIndicator.refreshing) {
+                    refreshIndicator.refreshing = true
+                    AppController.updateComicsInFolder()
+                    refreshResetTimer.restart()
+                }
+            }
             // 每格 = 封面(3:2) + 两行标题（固定预留 34px）
             cellWidth: width / Math.max(Math.floor(width / (70 * 2)), 1)
             cellHeight: cellWidth * 3 / 2 + 34
@@ -283,6 +294,34 @@ Item {
                 }
             }
             ScrollBar.vertical: ScrollBar { }
+        }
+
+        // 刷新状态提示
+        Rectangle {
+            id: refreshIndicator
+            property bool refreshing: false
+            visible: refreshing
+            anchors.horizontalCenter: parent.horizontalCenter
+            anchors.bottom: parent.bottom
+            anchors.bottomMargin: 20
+            width: refreshLabel.implicitWidth + 28
+            height: refreshLabel.implicitHeight + 14
+            radius: height / 2
+            color: "#CC000000"
+
+            Label {
+                id: refreshLabel
+                anchors.centerIn: parent
+                color: "white"
+                font.pixelSize: 12
+                text: "正在刷新…"
+            }
+        }
+
+        Timer {
+            id: refreshResetTimer
+            interval: 1800
+            onTriggered: refreshIndicator.refreshing = false
         }
 
         Component.onCompleted: function() {
