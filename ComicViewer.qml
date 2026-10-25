@@ -10,11 +10,13 @@ Item {
 
     property bool osdVisible: false
     property int currentPage: 0          // 0-based，界面显示时 +1
+    property bool startApplied: false
 
     anchors.fill: parent
 
     // 断点续读：本地进度优先，没有再用服务端记录的 current_page
     function resolveStartPage() {
+        if (pageCount <= 0) return 0
         const local = AppController.savedProgress(comicId)
         if (local > 0) return Math.min(local, Math.max(pageCount - 1, 0))
         const server = AppController.serverProgress()
@@ -38,6 +40,21 @@ Item {
         AppController.saveProgress(comicId, idx)
     }
 
+    // pageCount 是异步拿到的：初始为 0，数据到位后才变成真实值。
+    // 所以初始定位不能只在 onCompleted 里做，必须等 pageCount 就绪。
+    function applyStartPosition() {
+        if (startApplied || pageCount <= 0) return
+        const start = resolveStartPage()
+        if (start > 0) {
+            view.positionViewAtIndex(start, ListView.Beginning)
+        }
+        currentPage = start
+        startApplied = true
+    }
+
+    onPageCountChanged: applyStartPosition()
+    Component.onCompleted: applyStartPosition()
+
     ListView {
         id: view
         anchors.fill: parent
@@ -53,12 +70,20 @@ Item {
             id: pageItem
             required property int index
             width: view.width
-            height: pageLoader.item
-                    ? Math.max(pageLoader.item.paintedHeight, 1)
-                    : Math.round(view.width * 1.4)
 
-            // 只加载视口附近的页，避免一次性请求全部页面
-            // YACReader 服务端对同一 comic 的并发页面请求有限制，全量加载会返回 404
+            // 高度必须由图片原始尺寸算出，不能用 paintedHeight：
+            // paintedHeight 依赖 Image 当前高度，会与这里的 height 形成绑定循环，
+            // 表现为页面卡在 1/xxx 且界面无响应。
+            height: {
+                const it = pageLoader.item
+                if (it && it.implicitWidth > 0 && it.implicitHeight > 0) {
+                    return Math.max(Math.round(view.width * it.implicitHeight / it.implicitWidth), 1)
+                }
+                return Math.round(view.width * 1.4)
+            }
+
+            // 只加载视口附近的页。YACReader 服务端对同一 comic 的并发页面请求
+            // 有限制，一次性请求全部页面会导致后续请求全部 404。
             readonly property bool nearViewport: {
                 const vy = view.contentY
                 const vh = view.height
@@ -75,17 +100,27 @@ Item {
                 sourceComponent: Image {
                     fillMode: Image.PreserveAspectFit
                     asynchronous: true
+                    cache: false
                     source: AppController.comicImageSource(pageItem.index)
+
+                    // 服务端打开 cbz 需要时间，首个请求常返回 412（opening file）或 404。
+                    // 用递增间隔重试，而不是固定 800ms 死循环。
+                    property int retryCount: 0
 
                     onStatusChanged: {
                         if (status === Image.Error) {
-                            retryTimer.restart()
+                            if (retryCount < 6) {
+                                retryCount++
+                                retryTimer.interval = 500 * Math.pow(2, retryCount - 1)
+                                retryTimer.restart()
+                            }
+                        } else if (status === Image.Ready) {
+                            retryCount = 0
                         }
                     }
 
                     Timer {
                         id: retryTimer
-                        interval: 800
                         onTriggered: {
                             const s = AppController.comicImageSource(pageItem.index)
                             parent.source = ""
@@ -99,14 +134,6 @@ Item {
         // 滚动停止后落盘，避免频繁写设置
         onMovementEnded: saveTimer.restart()
         onFlickEnded: saveTimer.restart()
-
-        Component.onCompleted: {
-            const start = root.resolveStartPage()
-            if (start > 0) {
-                positionViewAtIndex(start, ListView.Beginning)
-            }
-            root.currentPage = start
-        }
     }
 
     Timer {
@@ -115,8 +142,10 @@ Item {
         onTriggered: root.persistProgress()
     }
 
-    // 关闭或离开前再存一次
-    Component.onDestruction: persistProgress()
+    // 离开前再存一次
+    Component.onDestruction: {
+        if (startApplied) persistProgress()
+    }
 
     // 顶部页码指示，点一下呼出操作面板
     Rectangle {

@@ -4,7 +4,14 @@ import QtQuick.Layouts
 import net.blumia.pineapple.comic.reader
 
 Item {
+    id: root
     anchors.fill: parent
+
+    // 跟随系统主题取前景色，浅色/深色主题下都能保证对比度
+    SystemPalette {
+        id: sysPalette
+        colorGroup: SystemPalette.Active
+    }
 
     Drawer {
         id: drawer
@@ -61,25 +68,29 @@ Item {
             Label {
                 text: `${AppController.filteredCount}/${AppController.totalComicCount}`
                 font.pixelSize: 12
-                opacity: 0.7
+                color: sysPalette.windowText
+                opacity: 0.75
             }
         }
 
         GridView {
             id: gridView
             clip: true
-            cellHeight: cellWidth * 3 / 2
-            cellWidth: width / Math.max(Math.floor(width / (65 * 2)), 1)
+            // 每格 = 封面(3:2) + 两行标题（固定预留 34px）
+            cellWidth: width / Math.max(Math.floor(width / (70 * 2)), 1)
+            cellHeight: cellWidth * 3 / 2 + 34
             Layout.fillWidth: true
             Layout.fillHeight: true
             model: AppController.comicsModel
             delegate: Item {
+                id: cell
                 width: GridView.view.cellWidth
                 height: GridView.view.cellHeight
 
                 Image {
                     id: cover
-                    anchors.fill: parent
+                    width: parent.width
+                    height: parent.width * 3 / 2
                     source: AppController.coverImageSource(model.hash)
                     fillMode: Image.PreserveAspectFit
                     asynchronous: true
@@ -89,8 +100,8 @@ Item {
                 // 阅读进度角标
                 Rectangle {
                     visible: model.currentPage > 0
-                    anchors.right: parent.right
-                    anchors.bottom: parent.bottom
+                    anchors.right: cover.right
+                    anchors.bottom: cover.bottom
                     anchors.margins: 4
                     height: progressLabel.implicitHeight + 4
                     width: progressLabel.implicitWidth + 10
@@ -104,6 +115,24 @@ Item {
                         font.pixelSize: 10
                         text: `${model.currentPage}/${model.pageCount}`
                     }
+                }
+
+                Label {
+                    id: titleLabel
+                    anchors.top: cover.bottom
+                    anchors.topMargin: 4
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.leftMargin: 2
+                    anchors.rightMargin: 2
+                    text: model.display
+                    font.pixelSize: 11
+                    font.weight: Font.Medium
+                    lineHeight: 1.15
+                    wrapMode: Text.Wrap
+                    maximumLineCount: 2
+                    elide: Text.ElideRight
+                    color: sysPalette.windowText
                 }
 
                 TapHandler {

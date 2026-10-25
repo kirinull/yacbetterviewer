@@ -157,13 +157,19 @@ void AppController::openComic()
         }
     }
 
-    m_restAccessManager->get(apiFactory().createRequest(QString("library/%1/comic/%2/remote")
-                                                            .arg(m_currentLibraryId).arg(m_currentComicId)),
+    // 服务端要求 X-Request-Id 头，缺失时会直接返回 404（不是 424）。
+    // requestFactory 的 commonHeaders 在这里没稳定带到，所以显式补上。
+    QNetworkRequest openReq = apiFactory().createRequest(QString("library/%1/comic/%2/remote")
+                                                         .arg(m_currentLibraryId).arg(m_currentComicId));
+    openReq.setRawHeader("X-Request-Id", "114514");
+
+    m_restAccessManager->get(openReq,
                             this, [=](QRestReply &reply){
         if (reply.isSuccess()) {
             setProperty("selectedComicOpened", true);
         } else {
             setProperty("selectedComicOpened", false);
+            setProperty("lastErrorMessage", QStringLiteral("打开失败: %1").arg(reply.httpStatus()));
         }
     });
 }
@@ -222,6 +228,8 @@ QString AppController::comicImageSource(int page)
                                                             .arg(m_currentLibraryId)
                                                             .arg(m_currentComicId)
                                                             .arg(page));
+
+
 
     return req.url().toString();
 }

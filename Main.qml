@@ -1,12 +1,15 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import net.blumia.pineapple.comic.reader
 
 ApplicationWindow {
+    id: window
     width: 480
     height: 640
     visible: true
     title: qsTr("YACReader Client")
+
     Loader {
         anchors.fill: parent
         source: {
@@ -16,10 +19,22 @@ ApplicationWindow {
             return "ComicOverviewPage.qml"
         }
     }
-    // before figure out how to handle back button on Android...
+
+    // Android 的返回键与全面屏返回手势都走 closing。
+    // 这里按层级逐级返回，最外层才真正退出。
     onClosing: function(close) {
-        if (Qt.platform.os === "android") {
-            close.accepted = false;
+        if (Qt.platform.os !== "android") return
+
+        close.accepted = false
+
+        if (AppController.selectedComicOpened) {
+            AppController.closeComic()
+        } else if (AppController.selectedComicId !== "") {
+            AppController.selectedComicId = ""
+        } else if (AppController.selectedLibraryId !== -1) {
+            AppController.selectedLibraryId = -1
+        } else {
+            Qt.exit(0)
         }
     }
 }
