@@ -62,3 +62,9 @@ install(TARGETS pcomic
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
+
+# 自定义 Android 资源（启动图标）。
+# android/res/mipmap-*/ic_launcher.png 会覆盖 Qt 模板里的默认图标。
+set_property(TARGET pcomic APPEND PROPERTY QT_ANDROID_PACKAGE_SOURCE_DIR
+    ${CMAKE_CURRENT_SOURCE_DIR}/android
+)
