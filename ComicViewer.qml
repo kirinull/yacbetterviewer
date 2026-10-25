@@ -276,12 +276,94 @@ Item {
             }
             Button {
                 Layout.fillWidth: true
+                text: "删除本子"
+                enabled: AppController.deleteServiceConfigured()
+                palette.button: "#B3261E"
+                palette.buttonText: "#FFFFFF"
+                onClicked: {
+                    root.osdVisible = false
+                    viewerDeleteDialog.open()
+                }
+            }
+            Button {
+                Layout.fillWidth: true
                 text: "关闭漫画"
                 onClicked: {
                     root.persistProgress()
                     root.osdVisible = false
                     AppController.closeComic()
                 }
+            }
+        }
+    }
+
+    // 阅读器内的删除确认：和详情页一致的两段式
+    Dialog {
+        id: viewerDeleteDialog
+        parent: Overlay.overlay
+        anchors.centerIn: parent
+        width: Math.min(parent.width * 0.9, 520)
+        modal: true
+        title: "删除本子"
+
+        property bool armed: false
+        onOpened: armed = false
+
+        ColumnLayout {
+            spacing: 12
+            width: parent.width
+
+            Label {
+                Layout.fillWidth: true
+                wrapMode: Text.Wrap
+                font.bold: true
+                text: `第 ${root.currentPage + 1} 页 / 共 ${root.pageCount} 页`
+            }
+
+            Label {
+                Layout.fillWidth: true
+                wrapMode: Text.Wrap
+                color: "#B3261E"
+                text: "这会删除电脑上的漫画文件。文件不会立即销毁，"
+                    + "而是移动到库外的回收站目录，需要时可以手工恢复。"
+            }
+
+            CheckBox {
+                text: "我确认要删除这个本子"
+                onCheckedChanged: viewerDeleteDialog.armed = checked
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                Layout.topMargin: 8
+
+                Button {
+                    Layout.fillWidth: true
+                    text: "取消"
+                    onClicked: viewerDeleteDialog.close()
+                }
+                Button {
+                    Layout.fillWidth: true
+                    text: "确认删除"
+                    enabled: viewerDeleteDialog.armed
+                    palette.button: "#B3261E"
+                    palette.buttonText: "#FFFFFF"
+                    onClicked: {
+                        viewerDeleteDialog.close()
+                        root.persistProgress()
+                        AppController.requestDelete(root.comicId)
+                    }
+                }
+            }
+        }
+    }
+
+    Connections {
+        target: AppController
+        function onDeleteFinished(ok, message) {
+            if (ok) {
+                // 删除成功后退出阅读器，详情页会跟着刷新
+                AppController.closeComic()
             }
         }
     }
