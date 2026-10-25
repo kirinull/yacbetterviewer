@@ -59,6 +59,17 @@ Item {
                     drawer.open();
                 }
             }
+
+            // 已看过归档入口：只切换列表视图，不动磁盘文件
+            ToolButton {
+                id: finishedButton
+                flat: true
+                text: AppController.showFinished
+                      ? "← 返回"
+                      : `已看过 ${AppController.finishedCount}`
+                font.pixelSize: 12
+                onClicked: AppController.setShowFinished(!AppController.showFinished)
+            }
             TextField {
                 id: searchField
                 Layout.fillWidth: true

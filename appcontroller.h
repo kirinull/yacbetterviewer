@@ -32,6 +32,8 @@ public:
     Q_PROPERTY(int totalComicCount MEMBER m_totalComicCount NOTIFY totalComicCountChanged FINAL)
     Q_PROPERTY(int sortMode MEMBER m_sortMode NOTIFY sortModeChanged FINAL)
     Q_PROPERTY(bool sortAscending MEMBER m_sortAscending NOTIFY sortAscendingChanged FINAL)
+    Q_PROPERTY(bool showFinished MEMBER m_showFinished NOTIFY showFinishedChanged FINAL)
+    Q_PROPERTY(int finishedCount MEMBER m_finishedCount NOTIFY finishedCountChanged FINAL)
 
     // 排序方式，与 QML 下拉菜单的 index 对应
     enum SortMode {
@@ -62,6 +64,15 @@ public:
     Q_INVOKABLE void setSort(int mode, bool ascending);
     Q_INVOKABLE void resort();
 
+    // 已读归档：只写本地标记，不动磁盘上的文件
+    Q_INVOKABLE void markFinished(const QString &comicId, bool finished);
+    Q_INVOKABLE bool isFinished(const QString &comicId) const;
+    Q_INVOKABLE void setShowFinished(bool show);
+
+    // 下一本：优先同作者，同作者没了就跳到下一个作者
+    Q_INVOKABLE bool hasNextComic() const;
+    Q_INVOKABLE void openNextComic();
+
     // 阅读进度：本地持久化，服务端 current_page 作为首次打开时的兜底
     Q_INVOKABLE int savedProgress(const QString &comicId) const;
     Q_INVOKABLE void saveProgress(const QString &comicId, int page);
@@ -79,6 +90,8 @@ signals:
     void totalComicCountChanged();
     void sortModeChanged();
     void sortAscendingChanged();
+    void showFinishedChanged();
+    void finishedCountChanged();
 
 private:
     QNetworkRequestFactory apiFactory() const;
@@ -105,4 +118,8 @@ private:
     int m_sortMode = SortByAdded;
     bool m_sortAscending = false;   // 默认最新添加在前
     QHash<QString, int> m_randomRank;  // 随机排序的稳定映射
+    bool m_showFinished = false;    // 当前是否在“已看过”视图
+    int m_finishedCount = 0;        // 已归档数量（只用于显示）
+    QSet<QString> m_finished;       // 已读完的 comicId 集合（本地标记）
+    bool m_switchingComic = false;  // “下一本”切换中，不要关阅读器
 };

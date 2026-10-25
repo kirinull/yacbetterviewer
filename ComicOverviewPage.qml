@@ -9,8 +9,15 @@ Control {
     anchors.fill: parent
     padding: 5
 
-    property var curComicIndex: AppController.currentComicModelIndex()
     property bool startReading: AppController.selectedComicOpened
+
+    // 必须显式依赖 selectedComicId，否则切到下一本时这里不会重算，
+    // pageCount 会继续用旧书的页数。
+    property var curComicIndex: {
+        const _dep = AppController.selectedComicId
+        return AppController.currentComicModelIndex()
+    }
+
     readonly property int comicPageCount: dataByRole(ComicItem.PageCountRole)
 
     // 本地进度优先，其次服务端
@@ -63,6 +70,14 @@ Control {
             enabled: root.comicPageCount > 0
             onClicked: function() {
                 AppController.openComic()
+            }
+        }
+        Button {
+            Layout.fillWidth: true
+            visible: AppController.isFinished(AppController.selectedComicId)
+            text: "移出已看过"
+            onClicked: function() {
+                AppController.markFinished(AppController.selectedComicId, false)
             }
         }
         Button {

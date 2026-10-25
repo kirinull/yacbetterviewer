@@ -14,6 +14,7 @@
 #include <QRandomGenerator>
 #include <QRestAccessManager>
 #include <QRestReply>
+#include <QSet>
 #include <QSettings>
 
 using namespace std::chrono_literals;
@@ -29,9 +30,23 @@ AppController::AppController(QObject *parent)
     m_librariesModel->setItemRoleNames(LibraryItem::roleNames());
     m_comicsModel->setItemRoleNames(ComicItem::roleNames());
     m_foldersModel->setItemRoleNames(FolderItem::roleNames());
+
+    // 已读标记存在本地设置里，不动磁盘上的文件
+    QSettings settings;
+    const QStringList archived = settings.value(QStringLiteral("finished")).toStringList();
+    for (const QString &id : archived) {
+        if (!id.isEmpty()) {
+            m_finished.insert(id);
+        }
+    }
+    m_finishedCount = m_finished.size();
+
     connect(this, &AppController::currentComicIdChanged, this, [this](){
         // "selected" is "current"
-        setProperty("selectedComicOpened", false);
+        // 切到下一本时不要关阅读器，否则会闪一下详情页
+        if (!m_switchingComic) {
+            setProperty("selectedComicOpened", false);
+        }
         m_serverProgress = 0;
     });
 }
@@ -118,13 +133,17 @@ void AppController::repopulateComicsModel()
 
     const QString needle = m_filterText.trimmed();
 
-    // 先过滤，再排序
+    // 先过滤（搜索词 + 已读归档状态），再排序
     QList<QJsonObject> rows;
     rows.reserve(m_allComics.size());
     for (const QJsonValue & value : std::as_const(m_allComics)) {
         const QJsonObject obj = value.toObject();
         if (!needle.isEmpty()
             && !obj["file_name"].toString().contains(needle, Qt::CaseInsensitive)) {
+            continue;
+        }
+        const bool archived = m_finished.contains(obj["id"].toString());
+        if (archived != m_showFinished) {
             continue;
         }
         rows.append(obj);
@@ -236,6 +255,106 @@ void AppController::resort()
     repopulateComicsModel();
 }
 
+void AppController::markFinished(const QString &comicId, bool finished)
+{
+    if (comicId.isEmpty()) return;
+
+    if (finished) {
+        m_finished.insert(comicId);
+    } else {
+        m_finished.remove(comicId);
+    }
+
+    QSettings settings;
+    settings.setValue(QStringLiteral("finished"), QStringList(m_finished.values()));
+
+    m_finishedCount = m_finished.size();
+    emit finishedCountChanged();
+
+    // 故意不在这里重建列表。
+    // 正在阅读的书被归档后会从 m_comicsModel 里消失，currentComicModelIndex()
+    // 返回无效索引，pageCount 变 0，阅读器直接崩到下面的详情页。
+    // 列表放到关闭阅读器时再刷新。
+}
+
+bool AppController::isFinished(const QString &comicId) const
+{
+    return m_finished.contains(comicId);
+}
+
+void AppController::setShowFinished(bool show)
+{
+    if (m_showFinished == show) return;
+    m_showFinished = show;
+    emit showFinishedChanged();
+    repopulateComicsModel();
+}
+
+// 在当前排序后的列表里找当前书的位置，优先下一本同作者的，
+// 同作者没有剩余就跳到下一个作者的第一本。
+bool AppController::hasNextComic() const
+{
+    if (m_currentComicId.isEmpty()) return false;
+
+    QString curAuthor;
+    int curIdx = -1;
+    for (int i = 0; i < m_comicsModel->rowCount(); ++i) {
+        QModelIndex idx = m_comicsModel->index(i, 0);
+        if (m_comicsModel->data(idx, ComicItem::IdRole).toString() == m_currentComicId) {
+            curIdx = i;
+            curAuthor = extractAuthor(m_comicsModel->data(idx, Qt::DisplayRole).toString());
+            break;
+        }
+    }
+    if (curIdx < 0) return false;
+
+    // 先往后找同作者
+    for (int i = curIdx + 1; i < m_comicsModel->rowCount(); ++i) {
+        QModelIndex idx = m_comicsModel->index(i, 0);
+        if (extractAuthor(m_comicsModel->data(idx, Qt::DisplayRole).toString()) == curAuthor) {
+            return true;
+        }
+    }
+    // 再找下一个作者（任意后续条目）
+    return curIdx + 1 < m_comicsModel->rowCount();
+}
+
+void AppController::openNextComic()
+{
+    if (m_currentComicId.isEmpty()) return;
+
+    QString curAuthor;
+    int curIdx = -1;
+    for (int i = 0; i < m_comicsModel->rowCount(); ++i) {
+        QModelIndex idx = m_comicsModel->index(i, 0);
+        if (m_comicsModel->data(idx, ComicItem::IdRole).toString() == m_currentComicId) {
+            curIdx = i;
+            curAuthor = extractAuthor(m_comicsModel->data(idx, Qt::DisplayRole).toString());
+            break;
+        }
+    }
+    if (curIdx < 0) return;
+
+    QString nextId;
+    for (int i = curIdx + 1; i < m_comicsModel->rowCount(); ++i) {
+        QModelIndex idx = m_comicsModel->index(i, 0);
+        if (extractAuthor(m_comicsModel->data(idx, Qt::DisplayRole).toString()) == curAuthor) {
+            nextId = m_comicsModel->data(idx, ComicItem::IdRole).toString();
+            break;
+        }
+    }
+    if (nextId.isEmpty() && curIdx + 1 < m_comicsModel->rowCount()) {
+        nextId = m_comicsModel->data(m_comicsModel->index(curIdx + 1, 0),
+                                     ComicItem::IdRole).toString();
+    }
+    if (nextId.isEmpty()) return;
+
+    m_switchingComic = true;
+    setProperty("selectedComicId", nextId);
+    m_switchingComic = false;
+    openComic();
+}
+
 void AppController::setFilter(const QString &text)
 {
     if (m_filterText == text) {
@@ -279,6 +398,10 @@ void AppController::closeComic()
 {
     // the api seems not to proceed by the server, so we simply do nothing but set the property
     setProperty("selectedComicOpened", false);
+
+    // 阅读期间可能产生了归档标记，这里才刷新列表，
+    // 避免在阅读中把当前书从模型里抽走导致索引失效。
+    repopulateComicsModel();
 }
 
 int AppController::savedProgress(const QString &comicId) const

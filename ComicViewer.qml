@@ -11,6 +11,7 @@ Item {
     property bool osdVisible: false
     property int currentPage: 0          // 0-based，界面显示时 +1
     property bool startApplied: false
+    property bool markedFinished: false
 
     anchors.fill: parent
 
@@ -24,9 +25,13 @@ Item {
         return 0
     }
 
-    // 取视口上部约 1/3 处所在的条目，最贴近"正在看的这一页"
+    // 取视口上部约 1/3 处所在的条目，最贴近"正在看的这一页"。
+    // 触底时必须直接判为最后一页：最后一页贴在视口顶部时，
+    // indexAt(contentY + height*0.3) 会落在下方空白区，算出更小的页码，
+    // 导致"读完"永远判不出来。
     function currentVisibleIndex() {
         if (pageCount <= 0) return 0
+        if (view.atYEnd) return pageCount - 1
         let idx = view.indexAt(view.contentX + 1, view.contentY + view.height * 0.3)
         if (idx < 0) idx = view.indexAt(view.contentX + 1, view.contentY + 1)
         return idx >= 0 ? idx : 0
@@ -38,6 +43,12 @@ Item {
             currentPage = idx
         }
         AppController.saveProgress(comicId, idx)
+
+        // 读到最后一页就自动归档（只写本地标记，不动文件）
+        if (pageCount > 0 && idx >= pageCount - 1 && !markedFinished) {
+            markedFinished = true
+            AppController.markFinished(comicId, true)
+        }
     }
 
     // pageCount 是异步拿到的：初始为 0，数据到位后才变成真实值。
@@ -54,6 +65,14 @@ Item {
 
     onPageCountChanged: applyStartPosition()
     Component.onCompleted: applyStartPosition()
+
+    // 切到下一本时重新定位到该书自己的进度
+    onComicIdChanged: {
+        startApplied = false
+        markedFinished = false
+        currentPage = 0
+        applyStartPosition()
+    }
 
     ListView {
         id: view
@@ -147,16 +166,16 @@ Item {
         if (startApplied) persistProgress()
     }
 
-    // 顶部页码指示，点一下呼出操作面板
+    // 页码指示器：屏幕底部居中，点一下呼出操作面板
     Rectangle {
         visible: !root.osdVisible
-        anchors.top: parent.top
+        anchors.bottom: parent.bottom
         anchors.horizontalCenter: parent.horizontalCenter
-        anchors.topMargin: 8
-        width: pageLabel.implicitWidth + 24
-        height: pageLabel.implicitHeight + 10
+        anchors.bottomMargin: 24
+        width: pageLabel.implicitWidth + 28
+        height: pageLabel.implicitHeight + 12
         radius: height / 2
-        color: "#99000000"
+        color: "#B3000000"
 
         Label {
             id: pageLabel
@@ -175,7 +194,14 @@ Item {
     Pane {
         visible: root.osdVisible
         anchors.fill: parent
-        opacity: 0.9
+        background: Rectangle {
+            color: sysPalette.window
+        }
+
+        SystemPalette {
+            id: sysPalette
+            colorGroup: SystemPalette.Active
+        }
 
         ColumnLayout {
             anchors.centerIn: parent
@@ -195,14 +221,41 @@ Item {
                 stepSize: 1
                 value: root.currentPage
                 onMoved: {
-                    view.positionViewAtIndex(Math.round(value), ListView.Beginning)
-                    root.currentPage = Math.round(value)
+                    const p = Math.round(value)
+                    view.positionViewAtIndex(p, ListView.Beginning)
+                    root.currentPage = p
+                    // 拖到最末端就直接当作读完，不等滚动事件
+                    if (p >= root.pageCount - 1 && !root.markedFinished) {
+                        root.markedFinished = true
+                        AppController.saveProgress(root.comicId, p)
+                        AppController.markFinished(root.comicId, true)
+                    }
                 }
             }
             Button {
                 Layout.fillWidth: true
                 text: "继续阅读"
                 onClicked: root.osdVisible = false
+            }
+            Button {
+                Layout.fillWidth: true
+                text: "下一本"
+                enabled: AppController.hasNextComic()
+                onClicked: {
+                    root.persistProgress()
+                    root.osdVisible = false
+                    AppController.openNextComic()
+                }
+            }
+            Button {
+                Layout.fillWidth: true
+                text: "已看完，归档"
+                onClicked: {
+                    root.persistProgress()
+                    AppController.markFinished(root.comicId, true)
+                    root.osdVisible = false
+                    AppController.closeComic()
+                }
             }
             Button {
                 Layout.fillWidth: true
