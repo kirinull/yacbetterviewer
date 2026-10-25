@@ -61,6 +61,11 @@ Item {
         }
         currentPage = start
         startApplied = true
+        // 定位后强制布局一次，让 delegate 的 y 就绪，
+        // 否则 nearViewport 全为 false，Loader 永不激活（白屏只剩页码）
+        Qt.callLater(function() {
+            view.forceLayout()
+        })
     }
 
     onPageCountChanged: applyStartPosition()
@@ -103,7 +108,12 @@ Item {
 
             // 只加载视口附近的页。YACReader 服务端对同一 comic 的并发页面请求
             // 有限制，一次性请求全部页面会导致后续请求全部 404。
+            //
+            // index < 3 是打破死锁的兜底：初始定位时 delegate 的 y 可能还没
+            // 布局完成，nearViewport 会全为 false，Loader 不激活，height 又
+            // 依赖 Loader 的 item，于是永远激活不了，表现为白屏只剥页码。
             readonly property bool nearViewport: {
+                if (index < 3) return true
                 const vy = view.contentY
                 const vh = view.height
                 const top = pageItem.y
