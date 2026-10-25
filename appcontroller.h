@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QImage>
 #include <QJsonArray>
 #include <QNetworkRequestFactory>
 #include <QQmlEngine>
@@ -58,6 +59,11 @@ public:
     Q_INVOKABLE QString coverImageSource(QString comicHash);
     Q_INVOKABLE QModelIndex currentComicModelIndex();
     Q_INVOKABLE QString comicImageSource(int page);
+
+    // 供 QQuickImageProvider 调用：同步取页图（带 X-Request-Id，命中缓存则直接读文件）。
+    // QML 的 Image 走 Qt 全局网络栈，带不上请求头，只能绕到 C++ 这边取。
+    QImage loadPageImage(int page);
+    QString pageCachePath(int page) const;
 
     // 搜索筛选：在已拉取的列表上本地过滤
     Q_INVOKABLE void setFilter(const QString &text);
@@ -134,4 +140,5 @@ private:
     bool m_showFavorites = false;   // 当前是否在“收藏”视图
     int m_favoriteCount = 0;
     QSet<QString> m_favorites;      // 收藏的 comicId 集合（本地标记）
+    QString m_pageCacheDir;         // 页面图片缓存目录
 };

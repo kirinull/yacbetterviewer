@@ -57,9 +57,26 @@ YACReader Library Server 的 Android 客户端，基于 [BLumia/pineapple-comic-
 ### 依赖
 
 - Qt 6.8.3（Android arm64 + Windows host）
+- **qtimageformats 附加模块**——必须装，否则没有 webp 解码插件
 - Android NDK 26.1.10909125
 - JDK 21
 - Android SDK：platform 36、build-tools 37.0.0
+
+装 qtimageformats：
+
+```powershell
+aqt install-qt windows android 6.8.3 android_arm64_v8a -m qtimageformats --outputdir C:\Qt
+```
+
+装完要删掉 `android-build` 目录重新 configure，否则 CMake 不会重新收集插件。
+
+验证插件确实进了 APK：
+
+```powershell
+python -c "import zipfile; z=zipfile.ZipFile('xxx.apk'); print([n.split('/')[-1] for n in z.namelist() if 'imageformats' in n.lower()])"
+```
+
+应该能看到 `libplugins_imageformats_qwebp_arm64-v8a.so`。缺了它，漫画里所有 webp 页都是空白——而 webp 在漫画包里占比很高。
 
 ### 步骤
 
