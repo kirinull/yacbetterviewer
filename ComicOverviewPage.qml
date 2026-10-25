@@ -81,6 +81,17 @@ Control {
                 AppController.toggleFavorite(AppController.selectedComicId)
             }
         }
+        // 与阅读器面板的"已看完，归档"一致，归档后回列表
+        Button {
+            Layout.fillWidth: true
+            visible: !AppController.isFinished(AppController.selectedComicId)
+            text: "已看完，归档"
+            onClicked: function() {
+                const id = AppController.selectedComicId
+                AppController.selectedComicId = ""
+                AppController.markFinished(id, true)
+            }
+        }
         Button {
             Layout.fillWidth: true
             visible: AppController.isFinished(AppController.selectedComicId)
