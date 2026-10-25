@@ -1,0 +1,14 @@
+# 构建产物
+build/
+android-build/
+*.apk
+*.log
+
+# 本机配置
+*.keystore
+local.properties
+
+# 编辑器
+.vscode/
+.idea/
+*.user

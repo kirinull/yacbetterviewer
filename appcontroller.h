@@ -1,0 +1,85 @@
+#pragma once
+
+#include <QJsonArray>
+#include <QNetworkRequestFactory>
+#include <QQmlEngine>
+#include <QRestAccessManager>
+#include <QStandardItemModel>
+
+class AppController : public QObject
+{
+    Q_OBJECT
+    QML_ELEMENT
+    QML_SINGLETON
+public:
+    enum ConnectionState {
+        NotConnected,
+        Connecting,
+        Connected
+    };
+    Q_ENUM(ConnectionState)
+
+    Q_PROPERTY(ConnectionState connectionState MEMBER m_connectionState NOTIFY connectionStateChanged FINAL)
+    Q_PROPERTY(int selectedLibraryId MEMBER m_currentLibraryId NOTIFY currentLibraryIdChanged FINAL)
+    Q_PROPERTY(QString selectedComicId MEMBER m_currentComicId NOTIFY currentComicIdChanged FINAL)
+    Q_PROPERTY(bool selectedComicOpened MEMBER m_currentComicOpened NOTIFY currentComicOpenedChanged FINAL)
+    Q_PROPERTY(QString lastErrorMessage MEMBER m_lastErrorMessage NOTIFY lastErrorMessageChanged FINAL)
+    Q_PROPERTY(QStandardItemModel * librariesModel MEMBER m_librariesModel CONSTANT FINAL)
+    Q_PROPERTY(QStandardItemModel * comicsModel MEMBER m_comicsModel CONSTANT FINAL)
+    Q_PROPERTY(QStandardItemModel * foldersModel MEMBER m_foldersModel CONSTANT FINAL)
+    Q_PROPERTY(QString filterText MEMBER m_filterText NOTIFY filterTextChanged FINAL)
+    Q_PROPERTY(int filteredCount MEMBER m_filteredCount NOTIFY filteredCountChanged FINAL)
+    Q_PROPERTY(int totalComicCount MEMBER m_totalComicCount NOTIFY totalComicCountChanged FINAL)
+
+    AppController(QObject *parent = nullptr);
+
+    Q_INVOKABLE void connectServer(QUrl serverBaseUrl);
+    Q_INVOKABLE void updateLibraries();
+    Q_INVOKABLE void updateComicsInFolder(QString folderId = "1");
+    Q_INVOKABLE void openComic();
+    Q_INVOKABLE void closeComic();
+    Q_INVOKABLE QString coverImageSource(QString comicHash);
+    Q_INVOKABLE QModelIndex currentComicModelIndex();
+    Q_INVOKABLE QString comicImageSource(int page);
+
+    // 搜索筛选：在已拉取的列表上本地过滤
+    Q_INVOKABLE void setFilter(const QString &text);
+
+    // 阅读进度：本地持久化，服务端 current_page 作为首次打开时的兜底
+    Q_INVOKABLE int savedProgress(const QString &comicId) const;
+    Q_INVOKABLE void saveProgress(const QString &comicId, int page);
+    Q_INVOKABLE int serverProgress() const;
+
+signals:
+    void librariesLoaded(int count);
+    void connectionStateChanged(ConnectionState newState);
+    void currentLibraryIdChanged(int newLibraryId);
+    void currentComicIdChanged(QString newComicId);
+    void currentComicOpenedChanged(bool opened);
+    void lastErrorMessageChanged(QString errorMessage);
+    void filterTextChanged();
+    void filteredCountChanged();
+    void totalComicCountChanged();
+
+private:
+    QNetworkRequestFactory apiFactory() const;
+    void repopulateComicsModel();
+
+    ConnectionState m_connectionState = NotConnected;
+    int m_currentLibraryId = -1;
+    QString m_currentComicId;
+    bool m_currentComicOpened = false;
+    QString m_lastErrorMessage;
+    QNetworkRequestFactory m_requestFactory;
+    QNetworkAccessManager * m_networkAccessManager;
+    QRestAccessManager * m_restAccessManager;
+    QStandardItemModel * m_librariesModel;
+    QStandardItemModel * m_comicsModel;
+    QStandardItemModel * m_foldersModel;
+
+    QJsonArray m_allComics;      // 全量，用于重新过滤
+    QString m_filterText;
+    int m_filteredCount = 0;
+    int m_totalComicCount = 0;
+    int m_serverProgress = 0;    // 当前选中漫画的服务端进度
+};
