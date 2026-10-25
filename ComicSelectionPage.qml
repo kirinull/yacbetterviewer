@@ -65,6 +65,89 @@ Item {
                 placeholderText: "搜索标题"
                 onTextChanged: AppController.setFilter(text)
             }
+
+            ToolButton {
+                id: sortButton
+                flat: true
+                text: "⇅"
+                font.pixelSize: 18
+                onClicked: sortMenu.open()
+
+                Menu {
+                    id: sortMenu
+                    y: sortButton.height
+
+                    MenuItem {
+                        text: "添加时间 ↓ 新"
+                        checkable: true
+                        checked: AppController.sortMode === 0 && !AppController.sortAscending
+                        onTriggered: AppController.setSort(0, false)
+                    }
+                    MenuItem {
+                        text: "添加时间 ↑ 旧"
+                        checkable: true
+                        checked: AppController.sortMode === 0 && AppController.sortAscending
+                        onTriggered: AppController.setSort(0, true)
+                    }
+                    MenuSeparator { }
+                    MenuItem {
+                        text: "名称 A-Z"
+                        checkable: true
+                        checked: AppController.sortMode === 1 && !AppController.sortAscending
+                        onTriggered: AppController.setSort(1, false)
+                    }
+                    MenuItem {
+                        text: "名称 Z-A"
+                        checkable: true
+                        checked: AppController.sortMode === 1 && AppController.sortAscending
+                        onTriggered: AppController.setSort(1, true)
+                    }
+                    MenuSeparator { }
+                    MenuItem {
+                        text: "作者 A-Z"
+                        checkable: true
+                        checked: AppController.sortMode === 2 && !AppController.sortAscending
+                        onTriggered: AppController.setSort(2, false)
+                    }
+                    MenuItem {
+                        text: "作者 Z-A"
+                        checkable: true
+                        checked: AppController.sortMode === 2 && AppController.sortAscending
+                        onTriggered: AppController.setSort(2, true)
+                    }
+                    MenuSeparator { }
+                    MenuItem {
+                        text: "大小 ↓ 大"
+                        checkable: true
+                        checked: AppController.sortMode === 3 && !AppController.sortAscending
+                        onTriggered: AppController.setSort(3, false)
+                    }
+                    MenuItem {
+                        text: "大小 ↑ 小"
+                        checkable: true
+                        checked: AppController.sortMode === 3 && AppController.sortAscending
+                        onTriggered: AppController.setSort(3, true)
+                    }
+                    MenuSeparator { }
+                    MenuItem {
+                        text: "页数 ↓ 多"
+                        checkable: true
+                        checked: AppController.sortMode === 4 && !AppController.sortAscending
+                        onTriggered: AppController.setSort(4, false)
+                    }
+                    MenuItem {
+                        text: "页数 ↑ 少"
+                        checkable: true
+                        checked: AppController.sortMode === 4 && AppController.sortAscending
+                        onTriggered: AppController.setSort(4, true)
+                    }
+                    MenuSeparator { }
+                    MenuItem {
+                        text: "随机洗牌"
+                        onTriggered: AppController.setSort(5, false)
+                    }
+                }
+            }
             Label {
                 text: `${AppController.filteredCount}/${AppController.totalComicCount}`
                 font.pixelSize: 12

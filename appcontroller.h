@@ -30,6 +30,19 @@ public:
     Q_PROPERTY(QString filterText MEMBER m_filterText NOTIFY filterTextChanged FINAL)
     Q_PROPERTY(int filteredCount MEMBER m_filteredCount NOTIFY filteredCountChanged FINAL)
     Q_PROPERTY(int totalComicCount MEMBER m_totalComicCount NOTIFY totalComicCountChanged FINAL)
+    Q_PROPERTY(int sortMode MEMBER m_sortMode NOTIFY sortModeChanged FINAL)
+    Q_PROPERTY(bool sortAscending MEMBER m_sortAscending NOTIFY sortAscendingChanged FINAL)
+
+    // 排序方式，与 QML 下拉菜单的 index 对应
+    enum SortMode {
+        SortByAdded = 0,
+        SortByName,
+        SortByAuthor,
+        SortBySize,
+        SortByPages,
+        SortRandom
+    };
+    Q_ENUM(SortMode)
 
     AppController(QObject *parent = nullptr);
 
@@ -44,6 +57,10 @@ public:
 
     // 搜索筛选：在已拉取的列表上本地过滤
     Q_INVOKABLE void setFilter(const QString &text);
+
+    // 排序：在本地对已拉取列表排序
+    Q_INVOKABLE void setSort(int mode, bool ascending);
+    Q_INVOKABLE void resort();
 
     // 阅读进度：本地持久化，服务端 current_page 作为首次打开时的兜底
     Q_INVOKABLE int savedProgress(const QString &comicId) const;
@@ -60,10 +77,13 @@ signals:
     void filterTextChanged();
     void filteredCountChanged();
     void totalComicCountChanged();
+    void sortModeChanged();
+    void sortAscendingChanged();
 
 private:
     QNetworkRequestFactory apiFactory() const;
     void repopulateComicsModel();
+    static QString extractAuthor(const QString &fileName);
 
     ConnectionState m_connectionState = NotConnected;
     int m_currentLibraryId = -1;
@@ -82,4 +102,7 @@ private:
     int m_filteredCount = 0;
     int m_totalComicCount = 0;
     int m_serverProgress = 0;    // 当前选中漫画的服务端进度
+    int m_sortMode = SortByAdded;
+    bool m_sortAscending = false;   // 默认最新添加在前
+    QHash<QString, int> m_randomRank;  // 随机排序的稳定映射
 };

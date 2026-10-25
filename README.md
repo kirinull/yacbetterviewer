@@ -22,9 +22,26 @@ YACReader Library Server 的 Android 客户端，基于 [BLumia/pineapple-comic-
 
 列表页顶部有搜索框，输入即在已加载的列表上本地过滤（不区分大小写），旁边显示 `筛后/总数`。
 
+### 3.1 排序
+
+顶部搜索框右侧的 ⇅ 按钮打开排序菜单，支持：
+
+- 添加时间（新/旧）
+- 名称（A-Z / Z-A）
+- 作者（A-Z / Z-A）——作者从文件名的第一个方括号提取，`[作者 (画师)]` 只取作者部分
+- 文件大小（大/小）
+- 页数（多/少）
+- 随机洗牌（每次选择都重新打乱）
+
+排序在本地内存中完成（拉取全部条目后重排），不会额外请求服务端。
+
 ### 4. 修复标题显示
 
 `LibrarySelectionPage.qml` 的 `Connections` 里直接引用了不存在的 `model`，导致 `ReferenceError: model is not defined`。改为通过 `AppController.librariesModel` 访问。
+
+### 4.1 列表显示文件名
+
+网格原本只有封面，现在每个条目下方显示两行文件名（超出省略）。文字颜色用 `SystemPalette.windowText` 跟随主题，不硬编码色值。
 
 ### 5. Android 平台适配
 
