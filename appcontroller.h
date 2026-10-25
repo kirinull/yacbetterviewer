@@ -60,6 +60,11 @@ public:
     Q_INVOKABLE QModelIndex currentComicModelIndex();
     Q_INVOKABLE QString comicImageSource(int page);
 
+    // 删除本子：调用电脑上的删除服务。文件不直接销毁，
+    // 服务端会移到库目录的 .deleted\ 下保留可恢复。
+    Q_INVOKABLE void requestDelete(const QString &comicId);
+    Q_INVOKABLE bool deleteServiceConfigured() const;
+
     // 供 QQuickImageProvider 调用：同步取页图（带 X-Request-Id，命中缓存则直接读文件）。
     // QML 的 Image 走 Qt 全局网络栈，带不上请求头，只能绕到 C++ 这边取。
     QImage loadPageImage(int page);
@@ -100,6 +105,7 @@ signals:
     void lastErrorMessageChanged(QString errorMessage);
     void filterTextChanged();
     void filteredCountChanged();
+    void deleteFinished(bool ok, const QString &message);
     void totalComicCountChanged();
     void sortModeChanged();
     void sortAscendingChanged();

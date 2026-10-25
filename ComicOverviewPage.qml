@@ -10,6 +10,7 @@ Control {
     padding: 5
 
     property bool startReading: AppController.selectedComicOpened
+    property bool deleteSucceeded: false
 
     // 必须显式依赖 selectedComicId，否则切到下一本时这里不会重算，
     // pageCount 会继续用旧书的页数。
@@ -84,6 +85,16 @@ Control {
         // 与阅读器面板的"已看完，归档"一致，归档后回列表
         Button {
             Layout.fillWidth: true
+            text: "删除本子"
+            enabled: AppController.deleteServiceConfigured()
+            onClicked: deleteDialog.open()
+
+            // 危险操作用醒目色，避免顺手点到
+            palette.button: "#B3261E"
+            palette.buttonText: "#FFFFFF"
+        }
+        Button {
+            Layout.fillWidth: true
             visible: !AppController.isFinished(AppController.selectedComicId)
             text: "已看完，归档"
             onClicked: function() {
@@ -109,6 +120,112 @@ Control {
         }
         Item {
             Layout.fillHeight: true
+        }
+    }
+
+
+    // 删除确认：两段式，先开对话框，勾选确认后才允许执行
+    Dialog {
+        id: deleteDialog
+        parent: Overlay.overlay
+        anchors.centerIn: parent
+        width: Math.min(parent.width * 0.9, 520)
+        modal: true
+        title: "删除本子"
+        closePolicy: Popup.CloseOnEscape
+
+        property bool armed: false
+
+        onOpened: armed = false
+
+        ColumnLayout {
+            spacing: 12
+            width: parent.width
+
+            Label {
+                Layout.fillWidth: true
+                wrapMode: Text.Wrap
+                font.bold: true
+                text: dataByRole(Qt.DisplayRole)
+            }
+
+            Label {
+                Layout.fillWidth: true
+                wrapMode: Text.Wrap
+                color: "#B3261E"
+                text: "这会删除电脑上的漫画文件。文件不会立即销毁，"
+                    + "而是移动到库目录的 .deleted 文件夹，需要时可以手工恢复。"
+            }
+
+            CheckBox {
+                id: confirmBox
+                text: "我确认要删除这个本子"
+                onCheckedChanged: deleteDialog.armed = checked
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                Layout.topMargin: 8
+
+                Button {
+                    Layout.fillWidth: true
+                    text: "取消"
+                    onClicked: deleteDialog.close()
+                }
+                Button {
+                    Layout.fillWidth: true
+                    text: "确认删除"
+                    enabled: deleteDialog.armed
+                    palette.button: "#B3261E"
+                    palette.buttonText: "#FFFFFF"
+                    onClicked: {
+                        deleteDialog.close()
+                        AppController.requestDelete(AppController.selectedComicId)
+                    }
+                }
+            }
+        }
+    }
+
+    // 删除结果提示
+    Dialog {
+        id: resultDialog
+        parent: Overlay.overlay
+        anchors.centerIn: parent
+        width: Math.min(parent.width * 0.9, 520)
+        modal: true
+        title: "删除"
+
+        property string message: ""
+
+        ColumnLayout {
+            spacing: 12
+            width: parent.width
+
+            Label {
+                Layout.fillWidth: true
+                wrapMode: Text.Wrap
+                text: resultDialog.message
+            }
+            Button {
+                Layout.fillWidth: true
+                text: "知道了"
+                onClicked: {
+                    resultDialog.close()
+                    if (root.deleteSucceeded) {
+                        AppController.selectedComicId = ""
+                    }
+                }
+            }
+        }
+    }
+
+    Connections {
+        target: AppController
+        function onDeleteFinished(ok, message) {
+            root.deleteSucceeded = ok
+            resultDialog.message = message
+            resultDialog.open()
         }
     }
 
