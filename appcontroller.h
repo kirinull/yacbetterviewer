@@ -34,6 +34,8 @@ public:
     Q_PROPERTY(bool sortAscending MEMBER m_sortAscending NOTIFY sortAscendingChanged FINAL)
     Q_PROPERTY(bool showFinished MEMBER m_showFinished NOTIFY showFinishedChanged FINAL)
     Q_PROPERTY(int finishedCount MEMBER m_finishedCount NOTIFY finishedCountChanged FINAL)
+    Q_PROPERTY(bool showFavorites MEMBER m_showFavorites NOTIFY showFavoritesChanged FINAL)
+    Q_PROPERTY(int favoriteCount MEMBER m_favoriteCount NOTIFY favoriteCountChanged FINAL)
 
     // 排序方式，与 QML 下拉菜单的 index 对应
     enum SortMode {
@@ -69,6 +71,11 @@ public:
     Q_INVOKABLE bool isFinished(const QString &comicId) const;
     Q_INVOKABLE void setShowFinished(bool show);
 
+    // 收藏：本地标记，服务端没有写收藏的 API
+    Q_INVOKABLE void toggleFavorite(const QString &comicId);
+    Q_INVOKABLE bool isFavorite(const QString &comicId) const;
+    Q_INVOKABLE void setShowFavorites(bool show);
+
     // 下一本：优先同作者，同作者没了就跳到下一个作者
     Q_INVOKABLE bool hasNextComic() const;
     Q_INVOKABLE void openNextComic();
@@ -92,6 +99,8 @@ signals:
     void sortAscendingChanged();
     void showFinishedChanged();
     void finishedCountChanged();
+    void showFavoritesChanged();
+    void favoriteCountChanged();
 
 private:
     QNetworkRequestFactory apiFactory() const;
@@ -122,4 +131,7 @@ private:
     int m_finishedCount = 0;        // 已归档数量（只用于显示）
     QSet<QString> m_finished;       // 已读完的 comicId 集合（本地标记）
     bool m_switchingComic = false;  // “下一本”切换中，不要关阅读器
+    bool m_showFavorites = false;   // 当前是否在“收藏”视图
+    int m_favoriteCount = 0;
+    QSet<QString> m_favorites;      // 收藏的 comicId 集合（本地标记）
 };

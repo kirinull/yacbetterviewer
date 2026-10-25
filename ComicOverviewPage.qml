@@ -74,6 +74,15 @@ Control {
         }
         Button {
             Layout.fillWidth: true
+            text: AppController.isFavorite(AppController.selectedComicId)
+                  ? "★ 已收藏（点击取消）"
+                  : "☆ 加入收藏"
+            onClicked: function() {
+                AppController.toggleFavorite(AppController.selectedComicId)
+            }
+        }
+        Button {
+            Layout.fillWidth: true
             visible: AppController.isFinished(AppController.selectedComicId)
             text: "移出已看过"
             onClicked: function() {

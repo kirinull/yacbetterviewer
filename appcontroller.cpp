@@ -41,6 +41,14 @@ AppController::AppController(QObject *parent)
     }
     m_finishedCount = m_finished.size();
 
+    const QStringList favs = settings.value(QStringLiteral("favorites")).toStringList();
+    for (const QString &id : favs) {
+        if (!id.isEmpty()) {
+            m_favorites.insert(id);
+        }
+    }
+    m_favoriteCount = m_favorites.size();
+
     connect(this, &AppController::currentComicIdChanged, this, [this](){
         // "selected" is "current"
         // 切到下一本时不要关阅读器，否则会闪一下详情页
@@ -143,7 +151,12 @@ void AppController::repopulateComicsModel()
             continue;
         }
         const bool archived = m_finished.contains(obj["id"].toString());
-        if (archived != m_showFinished) {
+        if (m_showFavorites) {
+            // 收藏视图：只看收藏，不管是否看过
+            if (!m_favorites.contains(obj["id"].toString())) {
+                continue;
+            }
+        } else if (archived != m_showFinished) {
             continue;
         }
         rows.append(obj);
@@ -286,7 +299,50 @@ void AppController::setShowFinished(bool show)
 {
     if (m_showFinished == show) return;
     m_showFinished = show;
+    if (show) {
+        m_showFavorites = false;
+        emit showFavoritesChanged();
+    }
     emit showFinishedChanged();
+    repopulateComicsModel();
+}
+
+void AppController::toggleFavorite(const QString &comicId)
+{
+    if (comicId.isEmpty()) return;
+
+    if (m_favorites.contains(comicId)) {
+        m_favorites.remove(comicId);
+    } else {
+        m_favorites.insert(comicId);
+    }
+
+    QSettings settings;
+    settings.setValue(QStringLiteral("favorites"), QStringList(m_favorites.values()));
+
+    m_favoriteCount = m_favorites.size();
+    emit favoriteCountChanged();
+
+    // 与归档同理：不在阅读中重建列表，避免当前书被抽走后索引失效
+    if (!m_showFavorites) {
+        repopulateComicsModel();
+    }
+}
+
+bool AppController::isFavorite(const QString &comicId) const
+{
+    return m_favorites.contains(comicId);
+}
+
+void AppController::setShowFavorites(bool show)
+{
+    if (m_showFavorites == show) return;
+    m_showFavorites = show;
+    if (show) {
+        m_showFinished = false;
+        emit showFinishedChanged();
+    }
+    emit showFavoritesChanged();
     repopulateComicsModel();
 }
 

@@ -50,29 +50,65 @@ Item {
 
         RowLayout {
             Layout.fillWidth: true
-            Layout.margins: 4
+            Layout.margins: 2
+            spacing: 0
 
+            // 三条横线：打开文件夹导航（手绘，避免字体缺字形变成方框）
             ToolButton {
                 flat: true
-                icon.name: "folder-open"
+                Layout.preferredWidth: 40
+                padding: 0
                 onClicked: function() {
                     drawer.open();
                 }
+
+                contentItem: Item {
+                    implicitWidth: 20
+                    implicitHeight: 16
+                    Column {
+                        anchors.centerIn: parent
+                        spacing: 4
+                        Repeater {
+                            model: 3
+                            Rectangle {
+                                width: 20
+                                height: 2
+                                radius: 1
+                                color: sysPalette.windowText
+                            }
+                        }
+                    }
+                }
             }
 
-            // 已看过归档入口：只切换列表视图，不动磁盘文件
+            // 已看过视图
             ToolButton {
                 id: finishedButton
                 flat: true
-                text: AppController.showFinished
-                      ? "← 返回"
-                      : `已看过 ${AppController.finishedCount}`
-                font.pixelSize: 12
+                text: "✓"
+                font.pixelSize: 18
+                Layout.preferredWidth: 36
+                padding: 0
+                opacity: AppController.showFinished ? 1.0 : 0.45
                 onClicked: AppController.setShowFinished(!AppController.showFinished)
             }
+
+            // 收藏视图
+            ToolButton {
+                id: favButton
+                flat: true
+                text: "★"
+                font.pixelSize: 18
+                Layout.preferredWidth: 36
+                padding: 0
+                opacity: AppController.showFavorites ? 1.0 : 0.45
+                onClicked: AppController.setShowFavorites(!AppController.showFavorites)
+            }
+
             TextField {
                 id: searchField
                 Layout.fillWidth: true
+                Layout.minimumWidth: 90
                 placeholderText: "搜索标题"
                 onTextChanged: AppController.setFilter(text)
             }
@@ -189,6 +225,19 @@ Item {
                     fillMode: Image.PreserveAspectFit
                     asynchronous: true
                     retainWhileLoading: true
+                }
+
+                // 收藏星标
+                Label {
+                    visible: AppController.isFavorite(model.comicId)
+                    anchors.left: cover.left
+                    anchors.top: cover.top
+                    anchors.margins: 4
+                    text: "★"
+                    color: "#FFD54F"
+                    font.pixelSize: 14
+                    style: Text.Outline
+                    styleColor: "#99000000"
                 }
 
                 // 阅读进度角标

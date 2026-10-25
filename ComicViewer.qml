@@ -269,6 +269,13 @@ Item {
             }
             Button {
                 Layout.fillWidth: true
+                text: AppController.isFavorite(root.comicId)
+                      ? "★ 已收藏（点击取消）"
+                      : "☆ 加入收藏"
+                onClicked: AppController.toggleFavorite(root.comicId)
+            }
+            Button {
+                Layout.fillWidth: true
                 text: "关闭漫画"
                 onClicked: {
                     root.persistProgress()
