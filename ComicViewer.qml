@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtQuick.Window
 import net.blumia.pineapple.comic.reader
 
 Item {
@@ -86,7 +87,8 @@ Item {
         orientation: ListView.Vertical
         model: root.pageCount
         spacing: 2
-        cacheBuffer: 600
+        // 预创建多留一些，减少滚动时反复创建销毁 delegate
+        cacheBuffer: 2400
         boundsBehavior: Flickable.StopAtBounds
         flickDeceleration: 3000
 
@@ -95,16 +97,14 @@ Item {
             required property int index
             width: view.width
 
-            // 高度必须由图片原始尺寸算出，不能用 paintedHeight：
-            // paintedHeight 依赖 Image 当前高度，会与这里的 height 形成绑定循环，
-            // 表现为页面卡在 1/xxx 且界面无响应。
-            height: {
-                const it = pageLoader.item
-                if (it && it.implicitWidth > 0 && it.implicitHeight > 0) {
-                    return Math.max(Math.round(view.width * it.implicitHeight / it.implicitWidth), 1)
-                }
-                return Math.round(view.width * 1.4)
-            }
+            // 高度只在图片首次就绪时算一次，之后固定。
+            // 原来 height 绑定图片实际尺寸，每加载完一页就改变一次，
+            // 触发 ListView 重新布局：所有 delegate 的 y 变、nearViewport
+            // 全部重算，滚动时肉眼可见掉帧。
+            property real settledHeight: 0
+            height: settledHeight > 0
+                    ? settledHeight
+                    : Math.round(view.width * 1.4)
 
             // 只加载视口附近的页。YACReader 服务端对同一 comic 的并发页面请求
             // 有限制，一次性请求全部页面会导致后续请求全部 404。
@@ -118,7 +118,7 @@ Item {
                 const vh = view.height
                 const top = pageItem.y
                 const bottom = pageItem.y + pageItem.height
-                return bottom > vy - vh * 0.5 && top < vy + vh * 1.5
+                return bottom > vy - vh * 0.35 && top < vy + vh * 1.35
             }
 
             Loader {
@@ -131,6 +131,12 @@ Item {
                     asynchronous: true
                     cache: false
                     source: AppController.comicImageSource(pageItem.index)
+
+                    // 按屏幕物理宽度解码，而不是原图分辨率。
+                    // 漫画扫描件常见两千像素宽，按原尺寸解码再缩放，
+                    // 内存带宽和 GPU 采样都吃不消，这是掉帧的主因之一。
+                    sourceSize.width: Math.round(view.width * (Screen.devicePixelRatio > 0
+                                                               ? Screen.devicePixelRatio : 2))
 
                     // 服务端打开 cbz 需要时间，首个请求常返回 412（opening file）或 404。
                     // 用递增间隔重试，而不是固定 800ms 死循环。
@@ -145,6 +151,11 @@ Item {
                             }
                         } else if (status === Image.Ready) {
                             retryCount = 0
+                            if (pageItem.settledHeight === 0
+                                    && implicitWidth > 0 && implicitHeight > 0) {
+                                pageItem.settledHeight =
+                                    Math.max(Math.round(view.width * implicitHeight / implicitWidth), 1)
+                            }
                         }
                     }
 
