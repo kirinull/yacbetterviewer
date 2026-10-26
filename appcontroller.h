@@ -5,6 +5,7 @@
 #include <QNetworkRequestFactory>
 #include <QQmlEngine>
 #include <QRestAccessManager>
+#include <QSet>
 #include <QStandardItemModel>
 
 class AppController : public QObject
@@ -132,6 +133,14 @@ signals:
 
 private:
     QNetworkRequestFactory apiFactory() const;
+
+public:
+    // 命中率统计，供验收使用。hit/(hit+miss)，口径为请求数。
+    Q_INVOKABLE QString coverCacheStats() const;
+    Q_INVOKABLE void resetCoverCacheStats();
+    Q_INVOKABLE void clearCoverCache();
+
+private:
     void repopulateComicsModel();
     static QString extractAuthor(const QString &fileName);
 

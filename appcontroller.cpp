@@ -1,4 +1,5 @@
 #include "appcontroller.h"
+#include "coverimageprovider.h"
 
 #include "dataitems/comicitem.h"
 #include "dataitems/folderitem.h"
@@ -17,6 +18,10 @@
 #include <QRestReply>
 #include <QSet>
 #include <QSettings>
+#include <QDir>
+#include <QFile>
+#include <QFileInfo>
+#include <QStandardPaths>
 
 using namespace std::chrono_literals;
 
@@ -496,12 +501,45 @@ int AppController::serverProgress() const
     return m_serverProgress;
 }
 
+
+
+
 QString AppController::coverImageSource(QString comicHash)
 {
-    QUrl url(apiFactory().baseUrl());
-    url.setPath(url.path() + "library/" + QString::number(m_currentLibraryId) + "/cover/" + comicHash + ".jpg");
-    return url.toString();
+    if (m_currentLibraryId < 0 || comicHash.isEmpty()) {
+        return QString();
+    }
+
+    // 封面统一交给 CoverImageProvider：它内部先查本地缓存，
+    // 未命中才下载并落盘，一次请求一次下载。
+    CoverImageProvider::setBaseUrl(apiFactory().baseUrl());
+    CoverImageProvider::setLibraryId(m_currentLibraryId);
+
+    return QStringLiteral("image://cover/") + comicHash;
 }
+
+QString AppController::coverCacheStats() const
+{
+    return CoverImageProvider::statsText();
+}
+
+void AppController::resetCoverCacheStats()
+{
+    CoverImageProvider::resetStats();
+}
+
+void AppController::clearCoverCache()
+{
+    QDir dir(CoverImageProvider::cacheDir());
+    const QFileInfoList files = dir.entryInfoList(QStringList() << QStringLiteral("*.jpg")
+                                                            << QStringLiteral("*.part"),
+                                                 QDir::Files);
+    for (const QFileInfo &fi : files) {
+        QFile::remove(fi.absoluteFilePath());
+    }
+}
+
+
 
 QModelIndex AppController::currentComicModelIndex()
 {

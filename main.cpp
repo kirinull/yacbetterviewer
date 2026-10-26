@@ -7,6 +7,7 @@
 #include "dataitems/libraryitem.h"
 #include "dataitems/comicitem.h"
 #include "dataitems/folderitem.h"
+#include "coverimageprovider.h"
 
 class QmlNetworkAccessManager : public QNetworkAccessManager
 {
@@ -52,6 +53,8 @@ int main(int argc, char *argv[])
 
     QQmlApplicationEngine engine;
     engine.setNetworkAccessManagerFactory(&namFactory);
+    // 封面统一走这个 provider：先本地缓存，没有才下载，避免同一张图取两次
+    engine.addImageProvider(QStringLiteral("cover"), new CoverImageProvider(&engine));
     QObject::connect(
         &engine,
         &QQmlApplicationEngine::objectCreationFailed,
