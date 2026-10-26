@@ -738,15 +738,26 @@ int AppController::gridFirstIndex() const
 }
 
 // 滚动位置写进 QSettings，下次启动 App 直接回到上次那一行。
+// 滚动时这个 setter 会被高频调用，直接写盘会拖慢滚动，
+// 所以内存里立即更新，落盘用一个 800ms 的单次定时器节流。
 void AppController::setGridFirstIndex(int index)
 {
     if (m_gridFirstIndex == index) {
         return;
     }
     m_gridFirstIndex = index;
-    QSettings settings;
-    settings.setValue(QStringLiteral("grid/firstIndex"), index);
     emit gridFirstIndexChanged();
+
+    if (!m_scrollSaveTimer) {
+        m_scrollSaveTimer = new QTimer(this);
+        m_scrollSaveTimer->setSingleShot(true);
+        m_scrollSaveTimer->setInterval(800);
+        connect(m_scrollSaveTimer, &QTimer::timeout, this, [this]() {
+            QSettings settings;
+            settings.setValue(QStringLiteral("grid/firstIndex"), m_gridFirstIndex);
+        });
+    }
+    m_scrollSaveTimer->start();
 }
 
 int AppController::columnCount() const

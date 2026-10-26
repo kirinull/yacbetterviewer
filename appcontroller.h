@@ -7,6 +7,7 @@
 #include <QRestAccessManager>
 #include <QSet>
 #include <QStandardItemModel>
+#include <QTimer>
 
 class AppController : public QObject
 {
@@ -194,5 +195,6 @@ private:
     int m_gridFirstIndex = -1;      // 列表首个可见项索引（比像素可靠）
     int m_columnCount = 2;          // 列表列数
     QStringList m_history;          // 浏览历史 comicId，最新的在前
+    QTimer *m_scrollSaveTimer = nullptr;  // 滚动位置落盘节流
     QString m_pageCacheDir;         // 页面图片缓存目录
 };

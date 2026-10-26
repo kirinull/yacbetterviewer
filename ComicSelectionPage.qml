@@ -402,11 +402,13 @@ Item {
             // 布局还没算完时给 contentY 赋值会被立刻重置回 0。
             function rememberPosition() {
                 if (restoring) return
+                // 页面不可见时不记：StackLayout 切页时 GridView 的布局会变，
+                // contentY 会瞬时为 0，记下去就把真实位置覆盖成顶部了。
+                // 可见时无论在哪都记，包括滚回顶部（那是真实意图）。
+                if (!root.visible) return
                 const idx = gridView.indexAt(1, Math.max(gridView.contentY, 0) + 1)
-                if (idx >= 0) {
-                    AppController.gridFirstIndex = idx
-                    AppController.gridScrollY = gridView.contentY
-                }
+                AppController.gridFirstIndex = Math.max(idx, 0)
+                AppController.gridScrollY = gridView.contentY
             }
 
             Timer {
@@ -464,10 +466,14 @@ Item {
             // 2) 下拉超过 80px 触发刷新
             onContentYChanged: {
                 if (!restoring) {
-                    scrollSaveTimer.restart()
-                    const idx = indexAt(1, Math.max(contentY, 0) + 1)
-                    if (idx >= 0) {
-                        AppController.gridFirstIndex = idx
+                    // 只在页面可见时记。StackLayout 切页时 contentY 会瞬时为 0，
+                    // 不挡就会把行号写成 0。
+                    if (root.visible) {
+                        scrollSaveTimer.restart()
+                        const idx = indexAt(1, Math.max(contentY, 0) + 1)
+                        if (idx >= 0) {
+                            AppController.gridFirstIndex = idx
+                        }
                     }
                 }
                 if (contentY < -80 && !refreshIndicator.refreshing) {
@@ -597,6 +603,9 @@ Item {
         onVisibleChanged: {
             if (visible) {
                 ensureComics()
+                // 从详情页返回时主动恢复一次位置。
+                // StackLayout 切页会让 GridView 重新布局，光靠「页面常驻」不够稳。
+                gridView.scheduleRestore()
             }
         }
 
