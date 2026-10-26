@@ -288,7 +288,7 @@ Item {
             Button {
                 Layout.fillWidth: true
                 text: "删除本子"
-                enabled: AppController.deleteServiceConfigured()
+                visible: AppController.deleteServiceConfigured()
                 palette.button: "#B3261E"
                 palette.buttonText: "#FFFFFF"
                 onClicked: {

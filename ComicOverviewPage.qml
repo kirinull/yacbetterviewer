@@ -122,7 +122,7 @@ Control {
         Button {
             Layout.fillWidth: true
             text: "删除本子"
-            enabled: AppController.deleteServiceConfigured()
+            visible: AppController.deleteServiceConfigured()
             onClicked: deleteDialog.open()
 
             // 危险操作用醒目色，避免顺手点到
