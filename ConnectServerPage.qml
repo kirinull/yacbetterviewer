@@ -9,7 +9,7 @@ Control {
     padding: 5
     contentItem: ColumnLayout {
         Label {
-            text: "Pineapple Comic Reader"
+            text: "yacbetterviewer"
             font.pixelSize: 20
         }
         Item {

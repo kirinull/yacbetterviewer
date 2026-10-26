@@ -8,7 +8,7 @@ ApplicationWindow {
     width: 480
     height: 640
     visible: true
-    title: qsTr("YACReader Client")
+    title: qsTr("yacbetterviewer")
 
     // 关键：列表页必须常驻。
     // 之前用 Loader 切页，从详情返回时 ComicSelectionPage 被销毁重建，
