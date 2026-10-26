@@ -161,6 +161,8 @@ public:
 private:
     void repopulateComicsModel();
     void rebuildRandomRanks(bool forceNewSeed);
+    // 归零列表位置，仅在重新排列（换排序/随机/列数）时调用
+    void resetListPosition();
     static QString extractAuthor(const QString &fileName);
 
     ConnectionState m_connectionState = NotConnected;

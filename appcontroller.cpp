@@ -298,6 +298,10 @@ void AppController::setSort(int mode, bool ascending)
     settings.setValue(QStringLiteral("sort/mode"), mode);
     settings.setValue(QStringLiteral("sort/ascending"), ascending);
 
+    // 重新排列后旧行号失去意义，归零回顶部。
+    // 这是唯一该回顶部的场景；点开漫画返回、重启 App 都应该停在原处。
+    resetListPosition();
+
     emit sortModeChanged();
     emit sortAscendingChanged();
 
@@ -339,7 +343,23 @@ void AppController::rebuildRandomRanks(bool forceNewSeed)
 
 void AppController::reshuffleRandom()
 {
+    // 换了一批顺序，同样归零回顶部
+    resetListPosition();
     rebuildRandomRanks(true);
+}
+
+// 把列表位置归零。调用方：切换排序、随机洗牌、切换列数。
+void AppController::resetListPosition()
+{
+    if (m_gridFirstIndex == 0 && qFuzzyIsNull(m_gridScrollY)) {
+        return;
+    }
+    m_gridFirstIndex = 0;
+    m_gridScrollY = 0;
+    QSettings settings;
+    settings.setValue(QStringLiteral("grid/firstIndex"), 0);
+    emit gridFirstIndexChanged();
+    emit gridScrollYChanged();
 }
 
 void AppController::markFinished(const QString &comicId, bool finished)
@@ -774,6 +794,8 @@ void AppController::setColumnCount(int count)
     m_columnCount = count;
     QSettings settings;
     settings.setValue(QStringLiteral("grid/columns"), count);
+    // 列数变了，同一个行号对应的画面完全不同，归零
+    resetListPosition();
     emit columnCountChanged();
 }
 
