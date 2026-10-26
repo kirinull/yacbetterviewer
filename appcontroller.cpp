@@ -151,6 +151,13 @@ void AppController::repopulateComicsModel()
             && !obj["file_name"].toString().contains(needle, Qt::CaseInsensitive)) {
             continue;
         }
+        // 作者筛选：只看这个作者的作品
+        if (!m_authorFilter.isEmpty()) {
+            if (extractAuthor(obj["file_name"].toString()) != m_authorFilter) {
+                continue;
+            }
+        }
+
         const bool archived = m_finished.contains(obj["id"].toString());
         if (m_showFavorites) {
             // 收藏视图：只看收藏，不管是否看过
@@ -596,6 +603,49 @@ void AppController::requestDelete(const QString &comicId)
             emit deleteFinished(false, err.isEmpty() ? QStringLiteral("删除失败") : err);
         }
     });
+}
+
+
+// 当前选中漫画的作者名，详情页用来显示并支持点进去
+QString AppController::currentAuthor() const
+{
+    if (m_currentComicId.isEmpty()) {
+        return QString();
+    }
+    for (const QJsonValue &value : std::as_const(m_allComics)) {
+        const QJsonObject obj = value.toObject();
+        if (obj["id"].toString() == m_currentComicId) {
+            return extractAuthor(obj["file_name"].toString());
+        }
+    }
+    return QString();
+}
+
+void AppController::filterByAuthor(const QString &author)
+{
+    if (author.isEmpty()) {
+        return;
+    }
+    m_authorFilter = author;
+    emit authorFilterChanged();
+    // 作者视图里不叠加“已看过/收藏”这些状态筛选，否则容易只看到空列表
+    m_showFinished = false;
+    m_showFavorites = false;
+    emit showFinishedChanged();
+    emit showFavoritesChanged();
+    // 回到列表
+    setProperty("selectedComicId", "");
+    repopulateComicsModel();
+}
+
+void AppController::clearAuthorFilter()
+{
+    if (m_authorFilter.isEmpty()) {
+        return;
+    }
+    m_authorFilter.clear();
+    emit authorFilterChanged();
+    repopulateComicsModel();
 }
 
 QNetworkRequestFactory AppController::apiFactory() const

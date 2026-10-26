@@ -203,11 +203,51 @@ Item {
             }
         }
 
+        // 作者筛选条：从详情页点作者进来时显示
+        Rectangle {
+            visible: AppController.authorFilter !== ""
+            Layout.fillWidth: true
+            Layout.preferredHeight: 36
+            color: "#1AC2185B"
+
+            RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: 10
+                anchors.rightMargin: 6
+
+                Label {
+                    Layout.fillWidth: true
+                    text: `作者：${AppController.authorFilter}`
+                    font.pixelSize: 13
+                    color: "#C2185B"
+                    elide: Text.ElideRight
+                }
+                ToolButton {
+                    text: "✕"
+                    font.pixelSize: 14
+                    Layout.preferredWidth: 32
+                    padding: 0
+                    onClicked: AppController.clearAuthorFilter()
+                }
+            }
+        }
+
         GridView {
             id: gridView
             clip: true
             // 允许下拉过冲，用来触发刷新
             boundsBehavior: Flickable.DragAndOvershootBounds
+
+            // 滚动停下时记住位置，页面重建后据此还原
+            // （返回详情页时页面会被销毁重建，不记就回到顶部了）
+            onMovementEnded: AppController.gridScrollY = contentY
+
+            function restoreScroll() {
+                const y = AppController.gridScrollY
+                if (y > 0 && Math.abs(contentY - y) > 1 && contentHeight > height) {
+                    contentY = y
+                }
+            }
 
             // 手指从上往下拉到超过 80px 就刷新
             onContentYChanged: {
@@ -326,6 +366,16 @@ Item {
 
         Component.onCompleted: function() {
             AppController.updateComicsInFolder()
+            // 列表数据是异步到的，等一帧再尝试还原
+            Qt.callLater(gridView.restoreScroll)
+        }
+
+        Connections {
+            target: AppController
+            // 数据到位（或筛后数量变化）才具备还原条件
+            function onFilteredCountChanged() {
+                Qt.callLater(gridView.restoreScroll)
+            }
         }
     }
 }

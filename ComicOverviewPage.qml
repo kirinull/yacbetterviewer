@@ -12,6 +12,11 @@ Control {
     property bool startReading: AppController.selectedComicOpened
     property bool deleteSucceeded: false
 
+    SystemPalette {
+        id: sysPalette
+        colorGroup: SystemPalette.Active
+    }
+
     // 必须显式依赖 selectedComicId，否则切到下一本时这里不会重算，
     // pageCount 会继续用旧书的页数。
     property var curComicIndex: {
@@ -47,6 +52,37 @@ Control {
             text: dataByRole(Qt.DisplayRole)
             wrapMode: Text.Wrap
         }
+        // 作者：点一下进入该作者的全部作品
+        RowLayout {
+            Layout.preferredWidth: root.width - 10
+            spacing: 6
+            visible: AppController.currentAuthor !== ""
+
+            Label {
+                text: "作者"
+                font.pixelSize: 12
+                color: sysPalette.windowText
+                opacity: 0.55
+            }
+            Label {
+                id: authorLabel
+                Layout.fillWidth: true
+                text: AppController.currentAuthor
+                font.pixelSize: 14
+                color: "#C2185B"
+                elide: Text.ElideRight
+
+                TapHandler {
+                    onTapped: AppController.filterByAuthor(AppController.currentAuthor)
+                }
+            }
+            Label {
+                text: "›"
+                font.pixelSize: 16
+                color: "#C2185B"
+            }
+        }
+
         Label {
             Layout.preferredWidth: root.width - 10
             text: `${root.comicPageCount} pages`

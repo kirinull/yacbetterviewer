@@ -31,6 +31,8 @@ ApplicationWindow {
             AppController.closeComic()
         } else if (AppController.selectedComicId !== "") {
             AppController.selectedComicId = ""
+        } else if (AppController.authorFilter !== "") {
+            AppController.clearAuthorFilter()
         } else if (AppController.selectedLibraryId !== -1) {
             AppController.selectedLibraryId = -1
         } else {

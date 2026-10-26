@@ -37,6 +37,10 @@ public:
     Q_PROPERTY(int finishedCount MEMBER m_finishedCount NOTIFY finishedCountChanged FINAL)
     Q_PROPERTY(bool showFavorites MEMBER m_showFavorites NOTIFY showFavoritesChanged FINAL)
     Q_PROPERTY(int favoriteCount MEMBER m_favoriteCount NOTIFY favoriteCountChanged FINAL)
+    Q_PROPERTY(QString authorFilter MEMBER m_authorFilter NOTIFY authorFilterChanged FINAL)
+    Q_PROPERTY(QString currentAuthor READ currentAuthor NOTIFY currentComicIdChanged FINAL)
+    // 列表滚动位置：从详情返回时用来回到原来那一行
+    Q_PROPERTY(double gridScrollY MEMBER m_gridScrollY NOTIFY gridScrollYChanged FINAL)
 
     // 排序方式，与 QML 下拉菜单的 index 对应
     enum SortMode {
@@ -87,6 +91,11 @@ public:
     Q_INVOKABLE bool isFavorite(const QString &comicId) const;
     Q_INVOKABLE void setShowFavorites(bool show);
 
+    // 作者筛选：点详情页的作者名进入该作者的全部作品
+    Q_INVOKABLE void filterByAuthor(const QString &author);
+    Q_INVOKABLE void clearAuthorFilter();
+    QString currentAuthor() const;
+
     // 下一本：优先同作者，同作者没了就跳到下一个作者
     Q_INVOKABLE bool hasNextComic() const;
     Q_INVOKABLE void openNextComic();
@@ -113,6 +122,8 @@ signals:
     void finishedCountChanged();
     void showFavoritesChanged();
     void favoriteCountChanged();
+    void authorFilterChanged();
+    void gridScrollYChanged();
 
 private:
     QNetworkRequestFactory apiFactory() const;
@@ -146,5 +157,7 @@ private:
     bool m_showFavorites = false;   // 当前是否在“收藏”视图
     int m_favoriteCount = 0;
     QSet<QString> m_favorites;      // 收藏的 comicId 集合（本地标记）
+    QString m_authorFilter;         // 按作者筛选，空表示不筛
+    double m_gridScrollY = 0;       // 列表滚动位置（像素）
     QString m_pageCacheDir;         // 页面图片缓存目录
 };
