@@ -42,7 +42,9 @@ public:
     Q_PROPERTY(QString currentAuthor READ currentAuthor NOTIFY currentComicIdChanged FINAL)
     // 列表滚动位置：从详情返回时用来回到原来那一行
     Q_PROPERTY(double gridScrollY READ gridScrollY WRITE setGridScrollY NOTIFY gridScrollYChanged FINAL)
-    Q_PROPERTY(int gridFirstIndex MEMBER m_gridFirstIndex NOTIFY gridFirstIndexChanged FINAL)
+    Q_PROPERTY(int gridFirstIndex READ gridFirstIndex WRITE setGridFirstIndex NOTIFY gridFirstIndexChanged FINAL)
+    // 列表列数，1 到 4，用户可切，持久化
+    Q_PROPERTY(int columnCount READ columnCount WRITE setColumnCount NOTIFY columnCountChanged FINAL)
 
     // 排序方式，与 QML 下拉菜单的 index 对应
     enum SortMode {
@@ -82,6 +84,8 @@ public:
     // 排序：在本地对已拉取列表排序
     Q_INVOKABLE void setSort(int mode, bool ascending);
     Q_INVOKABLE void resort();
+    // 点「随机洗牌」时换一批顺序；启动/刷新时用持久化 seed 重建
+    Q_INVOKABLE void reshuffleRandom();
 
     // 已读归档：只写本地标记，不动磁盘上的文件
     Q_INVOKABLE void markFinished(const QString &comicId, bool finished);
@@ -99,6 +103,17 @@ public:
     QString currentAuthor() const;
     double gridScrollY() const;
     void setGridScrollY(double y);
+    int gridFirstIndex() const;
+    void setGridFirstIndex(int index);
+
+    // 列数（1-4）
+    int columnCount() const;
+    void setColumnCount(int count);
+
+    // 浏览历史：记录打开过的漫画，最新的在前，上限 100 条
+    Q_INVOKABLE QVariantList historyList() const;
+    Q_INVOKABLE void clearHistory();
+    Q_INVOKABLE void openComicFromHistory(const QString &comicId);
 
     // 下一本：优先同作者，同作者没了就跳到下一个作者
     Q_INVOKABLE bool hasNextComic() const;
@@ -129,6 +144,8 @@ signals:
     void authorFilterChanged();
     void gridScrollYChanged();
     void gridFirstIndexChanged();
+    void columnCountChanged();
+    void historyChanged();
     void comicsReloaded();
 
 private:
@@ -142,6 +159,7 @@ public:
 
 private:
     void repopulateComicsModel();
+    void rebuildRandomRanks(bool forceNewSeed);
     static QString extractAuthor(const QString &fileName);
 
     ConnectionState m_connectionState = NotConnected;
@@ -174,5 +192,7 @@ private:
     QString m_authorFilter;         // 按作者筛选，空表示不筛
     double m_gridScrollY = 0;       // 列表滚动位置（像素）
     int m_gridFirstIndex = -1;      // 列表首个可见项索引（比像素可靠）
+    int m_columnCount = 2;          // 列表列数
+    QStringList m_history;          // 浏览历史 comicId，最新的在前
     QString m_pageCacheDir;         // 页面图片缓存目录
 };

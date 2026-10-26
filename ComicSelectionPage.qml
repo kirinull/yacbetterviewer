@@ -45,6 +45,98 @@ Item {
         }
     }
 
+    // 浏览历史面板：按打开时间倒序，点击直接进详情页
+    Drawer {
+        id: historyDrawer
+        // Popup 里取 parent.width 拿不到真实宽度（是 overlay），会算出 0，
+        // 于是退回到内容固有宽度，面板只剩几十像素。用固定值。
+        width: 360
+        height: Overlay.overlay ? Overlay.overlay.height : 640
+        edge: Qt.LeftEdge
+
+        // 每次打开重算一次；historyChanged 时也会刷新
+        property var hist: []
+        onOpened: hist = AppController.historyList()
+
+        Connections {
+            target: AppController
+            function onHistoryChanged() {
+                if (historyDrawer.opened) {
+                    historyDrawer.hist = AppController.historyList()
+                }
+            }
+        }
+
+        ColumnLayout {
+            anchors.fill: parent
+            spacing: 0
+
+            RowLayout {
+                Layout.fillWidth: true
+                Layout.margins: 8
+                Label {
+                    text: "浏览历史"
+                    font.bold: true
+                    font.pixelSize: 16
+                    Layout.fillWidth: true
+                    color: sysPalette.windowText
+                }
+                ToolButton {
+                    text: "清空"
+                    font.pixelSize: 13
+                    enabled: historyDrawer.hist.length > 0
+                    onClicked: AppController.clearHistory()
+                }
+            }
+
+            Label {
+                visible: historyDrawer.hist.length === 0
+                text: "还没有浏览记录"
+                Layout.fillWidth: true
+                Layout.topMargin: 24
+                horizontalAlignment: Text.AlignHCenter
+                color: sysPalette.windowText
+                opacity: 0.5
+            }
+
+            ListView {
+                id: historyList
+                clip: true
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                model: historyDrawer.hist
+                delegate: ItemDelegate {
+                    width: historyList.width
+                    onClicked: function() {
+                        AppController.openComicFromHistory(modelData.comicId)
+                        historyDrawer.close()
+                    }
+
+                    contentItem: Column {
+                        spacing: 2
+                        Label {
+                            text: modelData.title
+                            width: historyList.width - 30
+                            elide: Text.ElideRight
+                            maximumLineCount: 2
+                            wrapMode: Text.WordWrap
+                            font.pixelSize: 13
+                            color: sysPalette.windowText
+                        }
+                        Label {
+                            text: modelData.currentPage > 0
+                                  ? `读到 ${modelData.currentPage}/${modelData.pageCount}`
+                                  : `${modelData.pageCount} 页`
+                            font.pixelSize: 11
+                            color: sysPalette.windowText
+                            opacity: 0.55
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     ColumnLayout {
         anchors.fill: parent
 
@@ -77,6 +169,44 @@ Item {
                                 color: sysPalette.windowText
                             }
                         }
+                    }
+                }
+            }
+
+            // 浏览历史
+            ToolButton {
+                id: historyButton
+                flat: true
+                Layout.preferredWidth: 36
+                padding: 0
+                onClicked: historyDrawer.open()
+
+                // 时钟图标用手绘，与三条横线同理，不依赖字体字形
+                contentItem: Item {
+                    implicitWidth: 18
+                    implicitHeight: 18
+                    Rectangle {
+                        anchors.centerIn: parent
+                        width: 15
+                        height: 15
+                        radius: 7.5
+                        color: "transparent"
+                        border.width: 1.8
+                        border.color: sysPalette.windowText
+                    }
+                    Rectangle {
+                        x: parent.width / 2 - 0.9
+                        y: 5
+                        width: 1.8
+                        height: 5
+                        color: sysPalette.windowText
+                    }
+                    Rectangle {
+                        x: parent.width / 2
+                        y: parent.height / 2 - 0.9
+                        width: 4
+                        height: 1.8
+                        color: sysPalette.windowText
                     }
                 }
             }
@@ -191,7 +321,32 @@ Item {
                     MenuSeparator { }
                     MenuItem {
                         text: "随机洗牌"
-                        onTriggered: AppController.setSort(5, false)
+                        onTriggered: AppController.reshuffleRandom()
+                    }
+                    MenuSeparator { }
+                    MenuItem {
+                        text: "1 列"
+                        checkable: true
+                        checked: AppController.columnCount === 1
+                        onTriggered: AppController.columnCount = 1
+                    }
+                    MenuItem {
+                        text: "2 列"
+                        checkable: true
+                        checked: AppController.columnCount === 2
+                        onTriggered: AppController.columnCount = 2
+                    }
+                    MenuItem {
+                        text: "3 列"
+                        checkable: true
+                        checked: AppController.columnCount === 3
+                        onTriggered: AppController.columnCount = 3
+                    }
+                    MenuItem {
+                        text: "4 列"
+                        checkable: true
+                        checked: AppController.columnCount === 4
+                        onTriggered: AppController.columnCount = 4
                     }
                 }
             }
@@ -322,7 +477,7 @@ Item {
                 }
             }
             // 每格 = 封面(3:2) + 两行标题（固定预留 34px）
-            cellWidth: width / Math.max(Math.floor(width / (70 * 2)), 1)
+            cellWidth: width / Math.max(AppController.columnCount, 1)
             cellHeight: cellWidth * 3 / 2 + 34
             Layout.fillWidth: true
             Layout.fillHeight: true

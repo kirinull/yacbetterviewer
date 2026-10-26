@@ -55,6 +55,16 @@ AppController::AppController(QObject *parent)
     }
     m_favoriteCount = m_favorites.size();
 
+    // 恢复上次的列表位置、列数与浏览历史
+    m_columnCount = qBound(1, settings.value(QStringLiteral("grid/columns"), 2).toInt(), 4);
+    m_gridFirstIndex = settings.value(QStringLiteral("grid/firstIndex"), -1).toInt();
+    m_history = settings.value(QStringLiteral("history")).toStringList();
+
+    // 恢复上次的排序方式。排序不变，记下的行号才有意义；
+    // 特别是随机排序，靠持久化的 seed 才能重启后维持同一顺序。
+    m_sortMode = settings.value(QStringLiteral("sort/mode"), 0).toInt();
+    m_sortAscending = settings.value(QStringLiteral("sort/ascending"), false).toBool();
+
     connect(this, &AppController::currentComicIdChanged, this, [this](){
         // "selected" is "current"
         // 切到下一本时不要关阅读器，否则会闪一下详情页
@@ -149,6 +159,21 @@ void AppController::updateComicsInFolder(QString folderId)
 void AppController::repopulateComicsModel()
 {
     m_comicsModel->clear();
+
+    // 随机排序的权重靠持久化 seed 重建。启动后第一次填充时这表是空的，
+    // 不补就会退回原始顺序，重启后看起来就像「随机没记住」。
+    if (m_sortMode == SortRandom && m_randomRank.isEmpty() && !m_allComics.isEmpty()) {
+        QSettings settings;
+        quint32 seed = settings.value(QStringLiteral("sort/randomSeed"), 0).toUInt();
+        if (seed == 0) {
+            seed = QRandomGenerator::global()->generate();
+            settings.setValue(QStringLiteral("sort/randomSeed"), seed);
+        }
+        QRandomGenerator rng(seed);
+        for (const QJsonValue &value : std::as_const(m_allComics)) {
+            m_randomRank.insert(value.toObject()["id"].toString(), rng.generate());
+        }
+    }
 
     const QString needle = m_filterText.trimmed();
 
@@ -266,12 +291,18 @@ void AppController::setSort(int mode, bool ascending)
 {
     m_sortMode = mode;
     m_sortAscending = ascending;
+
+    // 排序方式持久化：关掉再开还是上次那个排法，
+    // 否则列表一重排，记下的行号就指错地方了。
+    QSettings settings;
+    settings.setValue(QStringLiteral("sort/mode"), mode);
+    settings.setValue(QStringLiteral("sort/ascending"), ascending);
+
     emit sortModeChanged();
     emit sortAscendingChanged();
 
-    // 每次选随机都重新打乱，否则同一个顺序就不再是“随机”
     if (mode == SortRandom) {
-        resort();
+        rebuildRandomRanks(false);
     } else {
         repopulateComicsModel();
     }
@@ -279,11 +310,36 @@ void AppController::setSort(int mode, bool ascending)
 
 void AppController::resort()
 {
+    rebuildRandomRanks(false);
+}
+
+// 重建随机权重。
+// forceNewSeed = true 表示用户主动点了「随机洗牌」，换一批顺序；
+// false 表示启动或刷新时重建，要用上次存下的 seed，
+// 否则每次重启随机顺序全变，记下的位置完全没意义。
+void AppController::rebuildRandomRanks(bool forceNewSeed)
+{
+    QSettings settings;
+    quint32 seed = 0;
+    if (!forceNewSeed) {
+        seed = settings.value(QStringLiteral("sort/randomSeed"), 0).toUInt();
+    }
+    if (seed == 0) {
+        seed = QRandomGenerator::global()->generate();
+        settings.setValue(QStringLiteral("sort/randomSeed"), seed);
+    }
+
+    QRandomGenerator rng(seed);
     m_randomRank.clear();
-    for (const QJsonValue & value : std::as_const(m_allComics)) {
-        m_randomRank.insert(value.toObject()["id"].toString(), QRandomGenerator::global()->generate());
+    for (const QJsonValue &value : std::as_const(m_allComics)) {
+        m_randomRank.insert(value.toObject()["id"].toString(), rng.generate());
     }
     repopulateComicsModel();
+}
+
+void AppController::reshuffleRandom()
+{
+    rebuildRandomRanks(true);
 }
 
 void AppController::markFinished(const QString &comicId, bool finished)
@@ -449,6 +505,18 @@ void AppController::openComic()
             m_serverProgress = obj["current_page"].toInt();
             break;
         }
+    }
+
+    // 记入浏览历史（最新的在前，去重，上限 100）
+    if (!m_currentComicId.isEmpty()) {
+        m_history.removeAll(m_currentComicId);
+        m_history.prepend(m_currentComicId);
+        while (m_history.size() > 100) {
+            m_history.removeLast();
+        }
+        QSettings settings;
+        settings.setValue(QStringLiteral("history"), m_history);
+        emit historyChanged();
     }
 
     // 服务端要求 X-Request-Id 头，缺失时会直接返回 404（不是 424）。
@@ -661,8 +729,84 @@ void AppController::setGridScrollY(double y)
         return;
     }
     m_gridScrollY = y;
-    qDebug() << "[SCROLL] 保存" << y;
     emit gridScrollYChanged();
+}
+
+int AppController::gridFirstIndex() const
+{
+    return m_gridFirstIndex;
+}
+
+// 滚动位置写进 QSettings，下次启动 App 直接回到上次那一行。
+void AppController::setGridFirstIndex(int index)
+{
+    if (m_gridFirstIndex == index) {
+        return;
+    }
+    m_gridFirstIndex = index;
+    QSettings settings;
+    settings.setValue(QStringLiteral("grid/firstIndex"), index);
+    emit gridFirstIndexChanged();
+}
+
+int AppController::columnCount() const
+{
+    return m_columnCount;
+}
+
+void AppController::setColumnCount(int count)
+{
+    count = qBound(1, count, 4);
+    if (m_columnCount == count) {
+        return;
+    }
+    m_columnCount = count;
+    QSettings settings;
+    settings.setValue(QStringLiteral("grid/columns"), count);
+    emit columnCountChanged();
+}
+
+QVariantList AppController::historyList() const
+{
+    QVariantList out;
+    for (const QString &comicId : m_history) {
+        for (const QJsonValue &value : std::as_const(m_allComics)) {
+            const QJsonObject obj = value.toObject();
+            if (obj["id"].toString() != comicId) {
+                continue;
+            }
+            QVariantMap item;
+            item[QStringLiteral("comicId")] = comicId;
+            item[QStringLiteral("title")] = obj["file_name"].toString();
+            item[QStringLiteral("hash")] = obj["hash"].toString();
+            item[QStringLiteral("pageCount")] = obj["num_pages"].toInt();
+            item[QStringLiteral("currentPage")] = savedProgress(comicId);
+            out.append(item);
+            break;
+        }
+    }
+    return out;
+}
+
+void AppController::clearHistory()
+{
+    m_history.clear();
+    QSettings settings;
+    settings.remove(QStringLiteral("history"));
+    emit historyChanged();
+}
+
+void AppController::openComicFromHistory(const QString &comicId)
+{
+    // 历史里的书可能被「已看过」或搜索过滤掉，先清过滤再定位，
+    // 否则详情页拿不到索引，进去是空的
+    clearAuthorFilter();
+    setShowFinished(false);
+    setShowFavorites(false);
+    setFilter(QString());
+
+    m_currentComicId = comicId;
+    emit currentComicIdChanged(comicId);
 }
 
 QString AppController::currentAuthor() const
