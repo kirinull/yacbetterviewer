@@ -1,7 +1,0 @@
-{
-  "_说明": "复制本文件为 config.json 并填入自己的 token。config.json 已被 .gitignore 忽略，不会进仓库。",
-  "token": "在这里填一个随机字符串，同时把这个值填进 delete_service.py 的默认值或启动参数",
-  "library_root": "F:/manga",
-  "trash_dir": "F:/manga-deleted",
-  "port": 8894
-}

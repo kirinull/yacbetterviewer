@@ -46,19 +46,6 @@ set_target_properties(pcomic PROPERTIES
     QT_ANDROID_PACKAGE_NAME "net.blumia.pineapple.comic.reader"
 )
 
-# 从删除服务的 config.json 读 token，编译时注入。
-# 服务地址不需要配置：从 YACReader 地址推导（同主机、端口 8894）。
-file(READ "${CMAKE_CURRENT_SOURCE_DIR}/delete-service/config.json" DELETE_CFG)
-string(JSON DELETE_TOKEN ERROR_VARIABLE _tok_err GET "${DELETE_CFG}" token)
-if(_tok_err)
-    message(WARNING "无法从 delete-service/config.json 读取 token，删除功能将不可用")
-    set(DELETE_TOKEN "")
-endif()
-
-target_compile_definitions(pcomic PRIVATE
-    PINEAPPLE_DELETE_TOKEN="${DELETE_TOKEN}"
-    PINEAPPLE_DELETE_PORT=8894
-)
 
 target_link_libraries(pcomic
     PRIVATE Qt6::Quick Qt6::Network
