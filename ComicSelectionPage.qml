@@ -294,6 +294,19 @@ Item {
                     }
                     MenuSeparator { }
                     MenuItem {
+                        text: "社团 A-Z"
+                        checkable: true
+                        checked: AppController.sortMode === 6 && !AppController.sortAscending
+                        onTriggered: AppController.setSort(6, false)
+                    }
+                    MenuItem {
+                        text: "社团 Z-A"
+                        checkable: true
+                        checked: AppController.sortMode === 6 && AppController.sortAscending
+                        onTriggered: AppController.setSort(6, true)
+                    }
+                    MenuSeparator { }
+                    MenuItem {
                         text: "大小 ↓ 大"
                         checkable: true
                         checked: AppController.sortMode === 3 && !AppController.sortAscending

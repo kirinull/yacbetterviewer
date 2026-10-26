@@ -41,6 +41,7 @@ public:
     Q_PROPERTY(int favoriteCount MEMBER m_favoriteCount NOTIFY favoriteCountChanged FINAL)
     Q_PROPERTY(QString authorFilter MEMBER m_authorFilter NOTIFY authorFilterChanged FINAL)
     Q_PROPERTY(QString currentAuthor READ currentAuthor NOTIFY currentComicIdChanged FINAL)
+    Q_PROPERTY(QString currentCircle READ currentCircle NOTIFY currentComicIdChanged FINAL)
     // 列表滚动位置：从详情返回时用来回到原来那一行
     Q_PROPERTY(double gridScrollY READ gridScrollY WRITE setGridScrollY NOTIFY gridScrollYChanged FINAL)
     Q_PROPERTY(int gridFirstIndex READ gridFirstIndex WRITE setGridFirstIndex NOTIFY gridFirstIndexChanged FINAL)
@@ -54,7 +55,8 @@ public:
         SortByAuthor,
         SortBySize,
         SortByPages,
-        SortRandom
+        SortRandom,
+        SortByCircle
     };
     Q_ENUM(SortMode)
 
@@ -99,6 +101,8 @@ public:
     Q_INVOKABLE void filterByAuthor(const QString &author);
     Q_INVOKABLE void clearAuthorFilter();
     QString currentAuthor() const;
+    QString currentCircle() const;
+    Q_INVOKABLE void filterByCircle(const QString &circle);
     double gridScrollY() const;
     void setGridScrollY(double y);
     int gridFirstIndex() const;
@@ -160,6 +164,7 @@ private:
     // 归零列表位置，仅在重新排列（换排序/随机/列数）时调用
     void resetListPosition();
     static QString extractAuthor(const QString &fileName);
+    static QString extractCircle(const QString &fileName);
 
     ConnectionState m_connectionState = NotConnected;
     int m_currentLibraryId = -1;

@@ -251,6 +251,21 @@ void AppController::repopulateComicsModel()
             return m_sortAscending ? cmp < 0 : cmp > 0;
         });
         break;
+    case SortByCircle:
+        std::sort(rows.begin(), rows.end(), [&](const QJsonObject &a, const QJsonObject &b) {
+            // 没有社团信息的排到最后，避免混进字母序列中间
+            const QString ca = extractCircle(a["file_name"].toString());
+            const QString cb = extractCircle(b["file_name"].toString());
+            if (ca.isEmpty() != cb.isEmpty()) {
+                return !ca.isEmpty();
+            }
+            const int cmp = QString::localeAwareCompare(ca, cb);
+            if (cmp != 0) return m_sortAscending ? cmp < 0 : cmp > 0;
+            const int nc = QString::localeAwareCompare(a["file_name"].toString(),
+                                                       b["file_name"].toString());
+            return m_sortAscending ? nc < 0 : nc > 0;
+        });
+        break;
     case SortByAdded:
     default:
         std::sort(rows.begin(), rows.end(), [&](const QJsonObject &a, const QJsonObject &b) {
@@ -271,6 +286,12 @@ void AppController::repopulateComicsModel()
 
 // 文件名格式普遍为 "[作者 (画师)] 标题 [汉化组]..."，取第一个方括号内的内容作为作者。
 // 没有方括号时退而取开头到第一个空格之前的部分。
+// 从文件名里提取作者与社团。
+//
+// 同人本常见格式是 "[社团 (作者)] 标题"，也有 "[作者] 标题"。
+// 之前这里取的是括号前的内容，等于把社团当成了作者，
+// 导致 [遥弤社 (源五郎)] 被归到「遥弤社」下。
+// 现在：有括号取括号内的作者，无括号则整体当作作者。
 QString AppController::extractAuthor(const QString &fileName)
 {
     const int lb = fileName.indexOf(QLatin1Char('['));
@@ -278,13 +299,40 @@ QString AppController::extractAuthor(const QString &fileName)
         const int rb = fileName.indexOf(QLatin1Char(']'), lb);
         if (rb > lb) {
             const QString inner = fileName.mid(lb + 1, rb - lb - 1).trimmed();
-            // 去掉画师括号部分："作者 (画师)" -> "作者"
-            const int paren = inner.indexOf(QLatin1Char('('));
-            return (paren > 0 ? inner.left(paren) : inner).trimmed();
+
+            const int lparen = inner.indexOf(QLatin1Char('('));
+            const int rparen = inner.lastIndexOf(QLatin1Char(')'));
+            if (lparen >= 0 && rparen > lparen) {
+                // "[社团 (作者)]" -> 取作者
+                const QString author = inner.mid(lparen + 1, rparen - lparen - 1).trimmed();
+                if (!author.isEmpty()) {
+                    return author;
+                }
+            }
+            // 没有括号，或括号内为空，整体当作作者
+            return inner;
         }
     }
     const int sp = fileName.indexOf(QLatin1Char(' '));
     return (sp > 0 ? fileName.left(sp) : fileName).trimmed();
+}
+
+// 提取社团名。"[社团 (作者)]" -> 社团；"[作者]" -> 空（无社团信息）。
+QString AppController::extractCircle(const QString &fileName)
+{
+    const int lb = fileName.indexOf(QLatin1Char('['));
+    if (lb >= 0) {
+        const int rb = fileName.indexOf(QLatin1Char(']'), lb);
+        if (rb > lb) {
+            const QString inner = fileName.mid(lb + 1, rb - lb - 1).trimmed();
+            const int lparen = inner.indexOf(QLatin1Char('('));
+            const int rparen = inner.lastIndexOf(QLatin1Char(')'));
+            if (lparen > 0 && rparen > lparen) {
+                return inner.left(lparen).trimmed();
+            }
+        }
+    }
+    return QString();
 }
 
 void AppController::setSort(int mode, bool ascending)
@@ -786,6 +834,33 @@ void AppController::filterByAuthor(const QString &author)
     emit showFinishedChanged();
     emit showFavoritesChanged();
     // 回到列表
+    setProperty("selectedComicId", "");
+    repopulateComicsModel();
+}
+
+QString AppController::currentCircle() const
+{
+    for (const QJsonValue &value : std::as_const(m_allComics)) {
+        const QJsonObject obj = value.toObject();
+        if (obj["id"].toString() == m_currentComicId) {
+            return extractCircle(obj["file_name"].toString());
+        }
+    }
+    return QString();
+}
+
+void AppController::filterByCircle(const QString &circle)
+{
+    if (circle.isEmpty()) {
+        return;
+    }
+    // 复用作者筛选的展示逻辑：按社团名过滤列表
+    m_authorFilter = circle;
+    emit authorFilterChanged();
+    m_showFinished = false;
+    m_showFavorites = false;
+    emit showFinishedChanged();
+    emit showFavoritesChanged();
     setProperty("selectedComicId", "");
     repopulateComicsModel();
 }

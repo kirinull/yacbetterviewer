@@ -51,6 +51,39 @@ Control {
             text: dataByRole(Qt.DisplayRole)
             wrapMode: Text.Wrap
         }
+        // 社团：同人本常见 [社团 (作者)] 格式，点社团可筛出该社团全部作品
+        RowLayout {
+            Layout.preferredWidth: root.width - 10
+            spacing: 6
+            visible: AppController.currentCircle !== ""
+
+            Label {
+                text: "社团"
+                font.pixelSize: 12
+                color: sysPalette.windowText
+                opacity: 0.55
+            }
+            Label {
+                id: circleLabel
+                text: AppController.currentCircle
+                font.pixelSize: 13
+                color: "#C4899A"
+                Layout.fillWidth: true
+                elide: Text.ElideRight
+            }
+            Label {
+                text: ">"
+                font.pixelSize: 13
+                color: "#C4899A"
+            }
+            MouseArea {
+                anchors.fill: parent
+                onClicked: function() {
+                    AppController.filterByCircle(AppController.currentCircle)
+                }
+            }
+        }
+
         // 作者：点一下进入该作者的全部作品
         RowLayout {
             Layout.preferredWidth: root.width - 10
