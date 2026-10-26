@@ -243,15 +243,24 @@ Item {
             // restoring 用于避免恢复过程把自己又记一遍。
             property bool restoring: false
 
+            // 记住「第一个可见的是第几个」。像素值在数据重新加载后不可靠：
+            // 布局还没算完时给 contentY 赋值会被立刻重置回 0。
+            function rememberPosition() {
+                if (restoring) return
+                const idx = gridView.indexAt(1, Math.max(gridView.contentY, 0) + 1)
+                if (idx >= 0) {
+                    AppController.gridFirstIndex = idx
+                    AppController.gridScrollY = gridView.contentY
+                }
+            }
+
             Timer {
                 id: scrollSaveTimer
                 interval: 250
-                onTriggered: {
-                    if (!gridView.restoring && gridView.contentY > 0) {
-                        AppController.gridScrollY = gridView.contentY
-                    }
-                }
+                onTriggered: rememberPosition()
             }
+
+            Component.onDestruction: rememberPosition()
 
             // 数据是网络异步回来的，可能好几秒后才到，所以重试窗口给足 12 秒。
             // 每拍都检查：数据够不够撑起滚动、当前是否已经到位。
@@ -267,22 +276,31 @@ Item {
                 repeat: true
                 onTriggered: {
                     attempts++
+                    const idx = AppController.gridFirstIndex
                     const y = AppController.gridScrollY
-                    if (y > 0 && contentHeight > height + y && Math.abs(contentY - y) > 2) {
-                        gridView.restoring = true
-                        gridView.contentY = y
-                        gridView.restoring = false
-                        if (Math.abs(contentY - y) <= 2) {
-                            stop()
-                            return
-                        }
-                    } else if (y > 0 && Math.abs(contentY - y) <= 2) {
+
+                    if (idx < 0 && y <= 0) { stop(); return }
+                    if (count <= 0) {
+                        if (attempts >= 80) stop()
+                        return
+                    }
+
+                    restoring = true
+                    if (idx > 0 && idx < count) {
+                        // 用索引定位：不依赖像素，布局没算完也能定位
+                        positionViewAtIndex(idx, GridView.Beginning)
+                    } else if (y > 0 && contentHeight > height + y) {
+                        contentY = y
+                    }
+                    restoring = false
+
+                    // 再校验一次是否真的到位
+                    const nowIdx = indexAt(1, Math.max(contentY, 0) + 1)
+                    if (idx < 0 || (nowIdx >= 0 && Math.abs(nowIdx - idx) <= 1)) {
                         stop()
                         return
                     }
-                    if (attempts >= 80) {
-                        stop()
-                    }
+                    if (attempts >= 80) stop()
                 }
             }
 
@@ -292,6 +310,10 @@ Item {
             onContentYChanged: {
                 if (!restoring) {
                     scrollSaveTimer.restart()
+                    const idx = indexAt(1, Math.max(contentY, 0) + 1)
+                    if (idx >= 0) {
+                        AppController.gridFirstIndex = idx
+                    }
                 }
                 if (contentY < -80 && !refreshIndicator.refreshing) {
                     refreshIndicator.refreshing = true
@@ -406,10 +428,21 @@ Item {
             onTriggered: refreshIndicator.refreshing = false
         }
 
-        Component.onCompleted: function() {
-            AppController.updateComicsInFolder()
-            // 列表数据是异步到的，等一帧再尝试还原
-            gridView.scheduleRestore()
+        // 同 LibrarySelectionPage：页面可能被提前创建，那时还没连上服务器，
+        // 请求会静默失败。改为页面可见时确保加载过。
+        function ensureComics() {
+            if (AppController.connectionState !== AppController.Connected) return
+            if (AppController.selectedLibraryId === -1) return
+            if (AppController.totalComicCount === 0) {
+                AppController.updateComicsInFolder()
+            }
+        }
+
+        Component.onCompleted: ensureComics()
+        onVisibleChanged: {
+            if (visible) {
+                ensureComics()
+            }
         }
 
         Connections {

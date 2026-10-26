@@ -28,8 +28,19 @@ Control {
             }
         }
 
-        Component.onCompleted: function() {
-            AppController.updateLibraries()
+        // StackLayout 会提前创建页面，onCompleted 时可能还没连上服务器，
+        // 那次请求必然失败且不会重试。改为每次页面可见时确认已加载。
+        function ensureLibraries() {
+            if (AppController.connectionState === AppController.Connected) {
+                AppController.updateLibraries()
+            }
+        }
+
+        Component.onCompleted: ensureLibraries()
+        onVisibleChanged: {
+            if (visible) {
+                ensureLibraries()
+            }
         }
     }
 

@@ -134,6 +134,7 @@ void AppController::updateComicsInFolder(QString folderId)
                 // 无条件通知：列表已重填。QML 靠它恢复滚动位置。
                 // 不能用 filteredCountChanged，那个只在数量变化时才发，
                 // 页面重建后数量往往一样，信号根本不触发。
+                qDebug() << "[SCROLL] 列表重填完成，应恢复位置" << m_gridScrollY;
                 emit comicsReloaded();
             }
         }
@@ -611,6 +612,21 @@ void AppController::requestDelete(const QString &comicId)
 
 
 // 当前选中漫画的作者名，详情页用来显示并支持点进去
+double AppController::gridScrollY() const
+{
+    return m_gridScrollY;
+}
+
+void AppController::setGridScrollY(double y)
+{
+    if (qFuzzyCompare(m_gridScrollY + 1.0, y + 1.0)) {
+        return;
+    }
+    m_gridScrollY = y;
+    qDebug() << "[SCROLL] 保存" << y;
+    emit gridScrollYChanged();
+}
+
 QString AppController::currentAuthor() const
 {
     if (m_currentComicId.isEmpty()) {

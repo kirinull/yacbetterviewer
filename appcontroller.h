@@ -40,7 +40,8 @@ public:
     Q_PROPERTY(QString authorFilter MEMBER m_authorFilter NOTIFY authorFilterChanged FINAL)
     Q_PROPERTY(QString currentAuthor READ currentAuthor NOTIFY currentComicIdChanged FINAL)
     // 列表滚动位置：从详情返回时用来回到原来那一行
-    Q_PROPERTY(double gridScrollY MEMBER m_gridScrollY NOTIFY gridScrollYChanged FINAL)
+    Q_PROPERTY(double gridScrollY READ gridScrollY WRITE setGridScrollY NOTIFY gridScrollYChanged FINAL)
+    Q_PROPERTY(int gridFirstIndex MEMBER m_gridFirstIndex NOTIFY gridFirstIndexChanged FINAL)
 
     // 排序方式，与 QML 下拉菜单的 index 对应
     enum SortMode {
@@ -95,6 +96,8 @@ public:
     Q_INVOKABLE void filterByAuthor(const QString &author);
     Q_INVOKABLE void clearAuthorFilter();
     QString currentAuthor() const;
+    double gridScrollY() const;
+    void setGridScrollY(double y);
 
     // 下一本：优先同作者，同作者没了就跳到下一个作者
     Q_INVOKABLE bool hasNextComic() const;
@@ -124,6 +127,7 @@ signals:
     void favoriteCountChanged();
     void authorFilterChanged();
     void gridScrollYChanged();
+    void gridFirstIndexChanged();
     void comicsReloaded();
 
 private:
@@ -160,5 +164,6 @@ private:
     QSet<QString> m_favorites;      // 收藏的 comicId 集合（本地标记）
     QString m_authorFilter;         // 按作者筛选，空表示不筛
     double m_gridScrollY = 0;       // 列表滚动位置（像素）
+    int m_gridFirstIndex = -1;      // 列表首个可见项索引（比像素可靠）
     QString m_pageCacheDir;         // 页面图片缓存目录
 };
