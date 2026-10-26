@@ -12,3 +12,6 @@ local.properties
 .vscode/
 .idea/
 *.user
+
+# 删除服务的真实 token，不进仓库
+delete-service/config.json
