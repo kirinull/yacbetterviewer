@@ -124,6 +124,7 @@ signals:
     void favoriteCountChanged();
     void authorFilterChanged();
     void gridScrollYChanged();
+    void comicsReloaded();
 
 private:
     QNetworkRequestFactory apiFactory() const;

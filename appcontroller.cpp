@@ -131,6 +131,10 @@ void AppController::updateComicsInFolder(QString folderId)
                 m_totalComicCount = m_allComics.size();
                 emit totalComicCountChanged();
                 repopulateComicsModel();
+                // 无条件通知：列表已重填。QML 靠它恢复滚动位置。
+                // 不能用 filteredCountChanged，那个只在数量变化时才发，
+                // 页面重建后数量往往一样，信号根本不触发。
+                emit comicsReloaded();
             }
         }
     });

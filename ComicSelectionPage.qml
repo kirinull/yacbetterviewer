@@ -238,19 +238,61 @@ Item {
             // 允许下拉过冲，用来触发刷新
             boundsBehavior: Flickable.DragAndOvershootBounds
 
-            // 滚动停下时记住位置，页面重建后据此还原
-            // （返回详情页时页面会被销毁重建，不记就回到顶部了）
-            onMovementEnded: AppController.gridScrollY = contentY
+            // 滚动时持续记录（防抖 250ms 落定）。
+            // 只靠 onMovementEnded 会漏：手指慢慢拖的时候不一定触发。
+            // restoring 用于避免恢复过程把自己又记一遍。
+            property bool restoring: false
 
-            function restoreScroll() {
-                const y = AppController.gridScrollY
-                if (y > 0 && Math.abs(contentY - y) > 1 && contentHeight > height) {
-                    contentY = y
+            Timer {
+                id: scrollSaveTimer
+                interval: 250
+                onTriggered: {
+                    if (!gridView.restoring && gridView.contentY > 0) {
+                        AppController.gridScrollY = gridView.contentY
+                    }
                 }
             }
 
-            // 手指从上往下拉到超过 80px 就刷新
+            // 数据是网络异步回来的，可能好几秒后才到，所以重试窗口给足 12 秒。
+            // 每拍都检查：数据够不够撑起滚动、当前是否已经到位。
+            function scheduleRestore() {
+                restoreTimer.attempts = 0
+                restoreTimer.restart()
+            }
+
+            Timer {
+                id: restoreTimer
+                property int attempts: 0
+                interval: 150
+                repeat: true
+                onTriggered: {
+                    attempts++
+                    const y = AppController.gridScrollY
+                    if (y > 0 && contentHeight > height + y && Math.abs(contentY - y) > 2) {
+                        gridView.restoring = true
+                        gridView.contentY = y
+                        gridView.restoring = false
+                        if (Math.abs(contentY - y) <= 2) {
+                            stop()
+                            return
+                        }
+                    } else if (y > 0 && Math.abs(contentY - y) <= 2) {
+                        stop()
+                        return
+                    }
+                    if (attempts >= 80) {
+                        stop()
+                    }
+                }
+            }
+
+            // contentY 变化时做两件事：
+            // 1) 防抖记录滚动位置（返回详情页时要还原到这里）
+            // 2) 下拉超过 80px 触发刷新
             onContentYChanged: {
+                if (!restoring) {
+                    scrollSaveTimer.restart()
+                }
                 if (contentY < -80 && !refreshIndicator.refreshing) {
                     refreshIndicator.refreshing = true
                     AppController.updateComicsInFolder()
@@ -367,14 +409,14 @@ Item {
         Component.onCompleted: function() {
             AppController.updateComicsInFolder()
             // 列表数据是异步到的，等一帧再尝试还原
-            Qt.callLater(gridView.restoreScroll)
+            gridView.scheduleRestore()
         }
 
         Connections {
             target: AppController
             // 数据到位（或筛后数量变化）才具备还原条件
-            function onFilteredCountChanged() {
-                Qt.callLater(gridView.restoreScroll)
+            function onComicsReloaded() {
+                gridView.scheduleRestore()
             }
         }
     }
