@@ -63,6 +63,8 @@ public:
     AppController(QObject *parent = nullptr);
 
     Q_INVOKABLE void connectServer(QUrl serverBaseUrl);
+    // 构建时注入的默认服务器地址，为空表示未配置
+    Q_INVOKABLE QString defaultServerUrl() const;
     Q_INVOKABLE void updateLibraries();
     Q_INVOKABLE void updateComicsInFolder(QString folderId = "1");
     Q_INVOKABLE void openComic();

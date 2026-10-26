@@ -50,6 +50,14 @@ set_target_properties(pcomic PROPERTIES
 target_link_libraries(pcomic
     PRIVATE Qt6::Quick Qt6::Network
 )
+
+# 默认服务器地址。构建时可通过 -DYBV_DEFAULT_SERVER=http://x.x.x.x:8080 注入，
+# 不传则为空（首次启动需要手填）。
+# 不硬编码在源码里，因为公开仓库上带真实内网地址不合适。
+set(YBV_DEFAULT_SERVER "" CACHE STRING "首次启动时预填的 YACReader 地址")
+target_compile_definitions(pcomic PRIVATE
+    YBV_DEFAULT_SERVER="${YBV_DEFAULT_SERVER}"
+)
 qt_import_plugins(pcomic
     INCLUDE_BY_TYPE imageformats
         # These are the ones that ship by default if we don't use `qt_import_plugins`

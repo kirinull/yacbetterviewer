@@ -75,6 +75,13 @@ AppController::AppController(QObject *parent)
     });
 }
 
+QString AppController::defaultServerUrl() const
+{
+    // 构建时通过 -DYBV_DEFAULT_SERVER=... 注入；
+    // 不传则返回空，首次启动仍需手填。
+    return QStringLiteral(YBV_DEFAULT_SERVER);
+}
+
 void AppController::connectServer(QUrl serverBaseUrl)
 {
     setProperty("connectionState", Connecting);
