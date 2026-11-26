@@ -60,6 +60,14 @@ AppController::AppController(QObject *parent)
     m_gridFirstIndex = settings.value(QStringLiteral("grid/firstIndex"), -1).toInt();
     m_history = settings.value(QStringLiteral("history")).toStringList();
 
+    // 本地阅读进度一次性读进内存，后续都走缓存。
+    // QSettings 里每条 progress/<id> 一个键，这里全量捞出来。
+    for (const QString &key : settings.allKeys()) {
+        if (key.startsWith(QStringLiteral("progress/"))) {
+            m_progressCache.insert(key.mid(9), settings.value(key).toInt());
+        }
+    }
+
     // 恢复上次的排序方式。排序不变，记下的行号才有意义；
     // 特别是随机排序，靠持久化的 seed 才能重启后维持同一顺序。
     m_sortMode = settings.value(QStringLiteral("sort/mode"), 0).toInt();
@@ -142,6 +150,14 @@ void AppController::updateComicsInFolder(QString folderId)
                 m_foldersModel->appendRow(new FolderItem(root, "Root"));
 
                 m_allComics = QJsonArray();
+
+    // 建 id -> 下标索引，供按 id 查找用。
+    // 原来按 id 找一本要遍历全量 2243 条，开一本书的路径上要扫七次。
+    m_indexById.clear();
+    m_indexById.reserve(m_allComics.size());
+    for (int i = 0; i < m_allComics.size(); ++i) {
+        m_indexById.insert(m_allComics.at(i).toObject()["id"].toString(), i);
+    }
                 for (const QJsonValue & value : array) {
                     QJsonObject obj = value.toObject();
                     if (obj["type"].toString() == QLatin1String("folder")) {
@@ -598,12 +614,9 @@ void AppController::openComic()
 {
     // 记下服务端保存的进度，供阅读器决定初始页
     m_serverProgress = 0;
-    for (const QJsonValue & value : std::as_const(m_allComics)) {
-        const QJsonObject obj = value.toObject();
-        if (obj["id"].toString() == m_currentComicId) {
-            m_serverProgress = obj["current_page"].toInt();
-            break;
-        }
+    const auto curIt = m_indexById.constFind(m_currentComicId);
+    if (curIt != m_indexById.constEnd()) {
+        m_serverProgress = m_allComics.at(curIt.value()).toObject()["current_page"].toInt();
     }
 
     // 记入浏览历史（最新的在前，去重，上限 100）
@@ -650,8 +663,9 @@ int AppController::savedProgress(const QString &comicId) const
     if (comicId.isEmpty()) {
         return 0;
     }
-    QSettings settings;
-    return settings.value(QStringLiteral("progress/%1").arg(comicId), 0).toInt();
+    // 走内存缓存。原来每次求值都新建一个 QSettings 并读盘，
+    // 而 historyList() 一次要取上百条，就是上百次 QSettings 构造。
+    return m_progressCache.value(comicId, 0);
 }
 
 void AppController::saveProgress(const QString &comicId, int page)
@@ -659,6 +673,7 @@ void AppController::saveProgress(const QString &comicId, int page)
     if (comicId.isEmpty() || page <= 0) {
         return;
     }
+    m_progressCache.insert(comicId, page);
     QSettings settings;
     settings.setValue(QStringLiteral("progress/%1").arg(comicId), page);
 }
@@ -797,22 +812,24 @@ void AppController::setColumnCount(int count)
 
 QVariantList AppController::historyList() const
 {
+    // 用索引查，不再对每条历史遍历全量。
+    // 原来最坏是 100 x 2243 = 22 万次元素访问，再加上每条一次 QSettings 构造。
     QVariantList out;
-    for (const QString &comicId : m_history) {
-        for (const QJsonValue &value : std::as_const(m_allComics)) {
-            const QJsonObject obj = value.toObject();
-            if (obj["id"].toString() != comicId) {
-                continue;
-            }
-            QVariantMap item;
-            item[QStringLiteral("comicId")] = comicId;
-            item[QStringLiteral("title")] = obj["file_name"].toString();
-            item[QStringLiteral("hash")] = obj["hash"].toString();
-            item[QStringLiteral("pageCount")] = obj["num_pages"].toInt();
-            item[QStringLiteral("currentPage")] = savedProgress(comicId);
-            out.append(item);
-            break;
+    out.reserve(m_history.size());
+    for (const QString &comicId : std::as_const(m_history)) {
+        const auto it = m_indexById.constFind(comicId);
+        if (it == m_indexById.constEnd()) {
+            continue;   // 已不在库里（被删或换了文件夹）
         }
+        const QJsonObject obj = m_allComics.at(it.value()).toObject();
+
+        QVariantMap item;
+        item[QStringLiteral("comicId")] = comicId;
+        item[QStringLiteral("title")] = obj["file_name"].toString();
+        item[QStringLiteral("hash")] = obj["hash"].toString();
+        item[QStringLiteral("pageCount")] = obj["num_pages"].toInt();
+        item[QStringLiteral("currentPage")] = savedProgress(comicId);
+        out.append(item);
     }
     return out;
 }
@@ -843,13 +860,13 @@ QString AppController::currentAuthor() const
     if (m_currentComicId.isEmpty()) {
         return QString();
     }
-    for (const QJsonValue &value : std::as_const(m_allComics)) {
-        const QJsonObject obj = value.toObject();
-        if (obj["id"].toString() == m_currentComicId) {
-            return extractAuthor(obj["file_name"].toString());
-        }
+    // 走索引，不再遍历全量。这个函数在 QML 里有多处绑定，
+    // 原来每次求值都要把 2243 条扫一遍。
+    const auto it = m_indexById.constFind(m_currentComicId);
+    if (it == m_indexById.constEnd()) {
+        return QString();
     }
-    return QString();
+    return extractAuthor(m_allComics.at(it.value()).toObject()["file_name"].toString());
 }
 
 void AppController::filterByAuthor(const QString &author)
@@ -871,13 +888,14 @@ void AppController::filterByAuthor(const QString &author)
 
 QString AppController::currentCircle() const
 {
-    for (const QJsonValue &value : std::as_const(m_allComics)) {
-        const QJsonObject obj = value.toObject();
-        if (obj["id"].toString() == m_currentComicId) {
-            return extractCircle(obj["file_name"].toString());
-        }
+    if (m_currentComicId.isEmpty()) {
+        return QString();
     }
-    return QString();
+    const auto it = m_indexById.constFind(m_currentComicId);
+    if (it == m_indexById.constEnd()) {
+        return QString();
+    }
+    return extractCircle(m_allComics.at(it.value()).toObject()["file_name"].toString());
 }
 
 void AppController::filterByCircle(const QString &circle)

@@ -5,6 +5,7 @@
 #include <QNetworkRequestFactory>
 #include <QQmlEngine>
 #include <QRestAccessManager>
+#include <QHash>
 #include <QSet>
 #include <QStandardItemModel>
 #include <QTimer>
@@ -181,6 +182,8 @@ private:
     QStandardItemModel * m_foldersModel;
 
     QJsonArray m_allComics;      // 全量，用于重新过滤
+    QHash<QString, int> m_indexById;   // comicId -> m_allComics 下标，避免线性查找
+    QHash<QString, int> m_progressCache;  // comicId -> 本地阅读进度，避免每次读 QSettings
     QString m_filterText;
     int m_filteredCount = 0;
     int m_totalComicCount = 0;
