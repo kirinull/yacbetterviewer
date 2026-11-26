@@ -240,7 +240,15 @@ Item {
                 Layout.fillWidth: true
                 Layout.minimumWidth: 90
                 placeholderText: "搜索标题"
-                onTextChanged: AppController.setFilter(text)
+                // 防抖：每敲一个字符就 setFilter 会触发一次全量重建
+                // （clear + 2243 行 appendRow + 排序），打字时肉眼可见掉帧。
+                onTextChanged: filterDebounce.restart()
+
+                Timer {
+                    id: filterDebounce
+                    interval: 180
+                    onTriggered: AppController.setFilter(searchField.text)
+                }
             }
 
             ToolButton {
@@ -415,12 +423,14 @@ Item {
             // 布局还没算完时给 contentY 赋值会被立刻重置回 0。
             function rememberPosition() {
                 if (restoring) return
-                // 页面不可见时不记：StackLayout 切页时 GridView 的布局会变，
-                // contentY 会瞬时为 0，记下去就把真实位置覆盖成顶部了。
-                // 可见时无论在哪都记，包括滚回顶部（那是真实意图）。
+                // 页面不可见时不记：StackLayout 切页时 GridView 的布局会变。
                 if (!root.visible) return
-                const idx = gridView.indexAt(1, Math.max(gridView.contentY, 0) + 1)
-                AppController.gridFirstIndex = Math.max(idx, 0)
+                // 下拉刷新会把 contentY 拉到负数（过冲），此时 indexAt(1, 1)
+                // 落在被下推的网格第 0 行上，会把位置记成 0。过冲期间直接跳过。
+                if (gridView.contentY < 0) return
+                const idx = gridView.indexAt(1, gridView.contentY + 1)
+                if (idx < 0) return          // 拿不到就跳过，不要兜底成 0
+                AppController.gridFirstIndex = idx
                 AppController.gridScrollY = gridView.contentY
             }
 
@@ -475,19 +485,14 @@ Item {
             }
 
             // contentY 变化时做两件事：
-            // 1) 防抖记录滚动位置（返回详情页时要还原到这里）
+            // 1) 防抖记录滚动位置（重启定时器，indexAt 交给 rememberPosition，不重复算）
             // 2) 下拉超过 80px 触发刷新
             onContentYChanged: {
-                if (!restoring) {
-                    // 只在页面可见时记。StackLayout 切页时 contentY 会瞬时为 0，
-                    // 不挡就会把行号写成 0。
-                    if (root.visible) {
-                        scrollSaveTimer.restart()
-                        const idx = indexAt(1, Math.max(contentY, 0) + 1)
-                        if (idx >= 0) {
-                            AppController.gridFirstIndex = idx
-                        }
-                    }
+                // 过冲（下拉刷新）期间 contentY 为负，不能参与位置记录。
+                // 只重启定时器，不在这里算 indexAt：每个像素都算一遍太贵，
+                // 且定时器 250ms 后本来就要重算一次。
+                if (root.visible && !restoring && contentY >= 0) {
+                    scrollSaveTimer.restart()
                 }
                 if (contentY < -80 && !refreshIndicator.refreshing) {
                     refreshIndicator.refreshing = true
@@ -498,6 +503,11 @@ Item {
             // 每格 = 封面(3:2) + 两行标题（固定预留 34px）
             cellWidth: width / Math.max(AppController.columnCount, 1)
             cellHeight: cellWidth * 3 / 2 + 34
+            // 开复用 + 预创建缓冲：快滑时少造一批 delegate，
+            // 也不用每次重新跑 6 处绑定和 2 次 Q_INVOKABLE。
+            // 这个 delegate 不保存 per-index 状态，复用是安全的。
+            reuseItems: true
+            cacheBuffer: cellHeight * 2
             Layout.fillWidth: true
             Layout.fillHeight: true
             model: AppController.comicsModel

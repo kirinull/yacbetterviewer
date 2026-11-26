@@ -184,105 +184,129 @@ void AppController::repopulateComicsModel()
 
     const QString needle = m_filterText.trimmed();
 
-    // 先过滤（搜索词 + 已读归档状态），再排序
-    QList<QJsonObject> rows;
+    // 先过滤，同时把排序要用的键一次算好。
+    //
+    // 之前排序的比较函数里直接调 extractAuthor / extractCircle，
+    // std::sort 平均做 n*log2(n) ≈ 2.5 万次比较，每次比较调两次，
+    // 就是约 5 万次字符串提取，每次内部还有两次 QString::mid 分配。
+    // 预先算进 Row 之后，提取次数降到 n（2243）次。
+    struct Row {
+        QJsonObject obj;
+        QString name;
+        QString group;      // 作者或社团，取决于当前排序模式；其他模式为空
+        qlonglong size = 0;
+        qlonglong added = 0;
+        qlonglong pages = 0;
+    };
+
+    QList<Row> rows;
     rows.reserve(m_allComics.size());
-    for (const QJsonValue & value : std::as_const(m_allComics)) {
+
+    for (const QJsonValue &value : std::as_const(m_allComics)) {
         const QJsonObject obj = value.toObject();
-        if (!needle.isEmpty()
-            && !obj["file_name"].toString().contains(needle, Qt::CaseInsensitive)) {
+        const QString name = obj["file_name"].toString();
+
+        if (!needle.isEmpty() && !name.contains(needle, Qt::CaseInsensitive)) {
             continue;
         }
-        // 作者筛选：只看这个作者的作品
+
+        // 作者/社团筛选。按哪个字段筛取决于当前排序模式：
+        // 社团排序下筛社团，其余筛作者。
         if (!m_authorFilter.isEmpty()) {
-            if (extractAuthor(obj["file_name"].toString()) != m_authorFilter) {
+            const QString key = (m_sortMode == SortByCircle) ? extractCircle(name)
+                                                             : extractAuthor(name);
+            if (key != m_authorFilter) {
                 continue;
             }
         }
 
-        const bool archived = m_finished.contains(obj["id"].toString());
+        const QString id = obj["id"].toString();
         if (m_showFavorites) {
-            // 收藏视图：只看收藏，不管是否看过
-            if (!m_favorites.contains(obj["id"].toString())) {
+            if (!m_favorites.contains(id)) {
                 continue;
             }
-        } else if (archived != m_showFinished) {
+        } else if (m_finished.contains(id) != m_showFinished) {
             continue;
         }
-        rows.append(obj);
-    }
 
-    auto keySize = [](const QJsonObject &o) {
-        return o["file_size"].toString().toLongLong();
-    };
-    auto keyAdded = [](const QJsonObject &o) {
-        return static_cast<qlonglong>(o["added"].toDouble());
-    };
-    auto keyPages = [](const QJsonObject &o) {
-        return static_cast<qlonglong>(o["num_pages"].toInt());
-    };
+        Row row;
+        row.obj = obj;
+        row.name = name;
+        row.size = obj["file_size"].toString().toLongLong();
+        row.added = static_cast<qlonglong>(obj["added"].toDouble());
+        row.pages = static_cast<qlonglong>(obj["num_pages"].toInt());
+
+        // 只有会用到 group 的排序模式才提前算，其余省掉
+        if (m_sortMode == SortByAuthor) {
+            row.group = extractAuthor(name);
+        } else if (m_sortMode == SortByCircle) {
+            row.group = extractCircle(name);
+        }
+
+        rows.append(row);
+    }
 
     switch (m_sortMode) {
     case SortRandom:
-        std::sort(rows.begin(), rows.end(), [this](const QJsonObject &a, const QJsonObject &b) {
-            return m_randomRank.value(a["id"].toString(), 0)
-                 < m_randomRank.value(b["id"].toString(), 0);
+        std::sort(rows.begin(), rows.end(), [this](const Row &a, const Row &b) {
+            return m_randomRank.value(a.obj["id"].toString(), 0)
+                 < m_randomRank.value(b.obj["id"].toString(), 0);
         });
         break;
     case SortBySize:
-        std::sort(rows.begin(), rows.end(), [&](const QJsonObject &a, const QJsonObject &b) {
-            return m_sortAscending ? keySize(a) < keySize(b) : keySize(a) > keySize(b);
+        std::sort(rows.begin(), rows.end(), [&](const Row &a, const Row &b) {
+            return m_sortAscending ? a.size < b.size : a.size > b.size;
         });
         break;
     case SortByPages:
-        std::sort(rows.begin(), rows.end(), [&](const QJsonObject &a, const QJsonObject &b) {
-            return m_sortAscending ? keyPages(a) < keyPages(b) : keyPages(a) > keyPages(b);
+        std::sort(rows.begin(), rows.end(), [&](const Row &a, const Row &b) {
+            return m_sortAscending ? a.pages < b.pages : a.pages > b.pages;
         });
         break;
     case SortByAuthor:
-        std::sort(rows.begin(), rows.end(), [&](const QJsonObject &a, const QJsonObject &b) {
-            const QString aa = extractAuthor(a["file_name"].toString());
-            const QString ab = extractAuthor(b["file_name"].toString());
-            const int cmp = QString::localeAwareCompare(aa, ab);
+        std::sort(rows.begin(), rows.end(), [&](const Row &a, const Row &b) {
+            const int cmp = QString::localeAwareCompare(a.group, b.group);
             if (cmp != 0) return m_sortAscending ? cmp < 0 : cmp > 0;
             // 同作者内按文件名，保证结果稳定
-            const int nc = QString::localeAwareCompare(a["file_name"].toString(),
-                                                       b["file_name"].toString());
+            const int nc = QString::localeAwareCompare(a.name, b.name);
             return m_sortAscending ? nc < 0 : nc > 0;
         });
         break;
     case SortByName:
-        std::sort(rows.begin(), rows.end(), [&](const QJsonObject &a, const QJsonObject &b) {
-            const int cmp = QString::localeAwareCompare(a["file_name"].toString(),
-                                                        b["file_name"].toString());
+        std::sort(rows.begin(), rows.end(), [&](const Row &a, const Row &b) {
+            const int cmp = QString::localeAwareCompare(a.name, b.name);
             return m_sortAscending ? cmp < 0 : cmp > 0;
         });
         break;
     case SortByCircle:
-        std::sort(rows.begin(), rows.end(), [&](const QJsonObject &a, const QJsonObject &b) {
+        std::sort(rows.begin(), rows.end(), [&](const Row &a, const Row &b) {
             // 没有社团信息的排到最后，避免混进字母序列中间
-            const QString ca = extractCircle(a["file_name"].toString());
-            const QString cb = extractCircle(b["file_name"].toString());
-            if (ca.isEmpty() != cb.isEmpty()) {
-                return !ca.isEmpty();
+            if (a.group.isEmpty() != b.group.isEmpty()) {
+                return !a.group.isEmpty();
             }
-            const int cmp = QString::localeAwareCompare(ca, cb);
+            const int cmp = QString::localeAwareCompare(a.group, b.group);
             if (cmp != 0) return m_sortAscending ? cmp < 0 : cmp > 0;
-            const int nc = QString::localeAwareCompare(a["file_name"].toString(),
-                                                       b["file_name"].toString());
+            const int nc = QString::localeAwareCompare(a.name, b.name);
             return m_sortAscending ? nc < 0 : nc > 0;
         });
         break;
     case SortByAdded:
     default:
-        std::sort(rows.begin(), rows.end(), [&](const QJsonObject &a, const QJsonObject &b) {
-            return m_sortAscending ? keyAdded(a) < keyAdded(b) : keyAdded(a) > keyAdded(b);
+        std::sort(rows.begin(), rows.end(), [&](const Row &a, const Row &b) {
+            return m_sortAscending ? a.added < b.added : a.added > b.added;
         });
         break;
     }
 
-    for (const QJsonObject &obj : std::as_const(rows)) {
-        m_comicsModel->appendRow(new ComicItem(obj, obj["file_name"].toString()));
+    // 批量插入：appendRow 每行发一次 rowsInserted，2243 行就是 2243 次信号，
+    // 每次都会让挂在上面的 GridView 处理一遍插入。改成 appendRows 只发一次。
+    QList<QStandardItem *> items;
+    items.reserve(rows.size());
+    for (const Row &row : std::as_const(rows)) {
+        items.append(new ComicItem(row.obj, row.name));
+    }
+    if (!items.isEmpty()) {
+        m_comicsModel->invisibleRootItem()->appendRows(items);
     }
 
     if (m_filteredCount != rows.size()) {
